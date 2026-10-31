@@ -149,3 +149,10 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Rejected deciding admin in the app (a hard-coded email list in the bundle): anyone could read it, and the server has to check anyway. Asking `/auth/me` covers a restored session, which never goes through the login call. Rejected a separate admin card component: the existing card plus a footer keeps the look identical to the feed.
 - **Why it's good:** Login flow unchanged; no new packages; all four states handled (loading, error with 401 → log in, empty per tab, list). Closing an issue on the Open tab makes it drop off the list and the map at once, which reads clearly in a demo.
 - **Fallbacks / limits:** `tsc` passes and the Android bundle builds (`expo export`), but it is **not yet checked on a phone**. While `/auth/me` is loading after a cold start the menu item is briefly hidden. One status change at a time shows a spinner; tapping two rows quickly only spins the latest. No confirmation dialog — a wrong tap is undone with the opposite button.
+
+### Pull-to-refresh on the feed and issue detail — 2026-10-31
+- **Task:** Add pull-to-refresh where it was missing (an earlier attempt with optimistic updates was reverted; only this part was kept).
+- **Decision:** New `src/hooks/usePullToRefresh.ts` hook; `RefreshControl` on the home feed list in `IssueSheet.tsx` (the empty state moved into `ListEmptyComponent` so an empty area can be pulled too) and on the issue detail `ScrollView` (reloads the issue and its comments). Admin and Your Issues already had it and are unchanged.
+- **Why:** Rejected `refreshing={isRefetching}`: the feed's query refetches whenever the map area changes or after an upvote, which would pop the spinner without a pull. The hook only spins for a refresh the user started.
+- **Why it's good:** Standard gesture, no new packages, no change to queries or the contract.
+- **Fallbacks / limits:** `tsc` passes and the Android bundle builds; **not yet checked on a phone**. Pulling the feed while the sheet is half-open also expands it to full (the list's existing scroll behaviour).

@@ -1,10 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, KeyboardAvoidingView, type ScrollViewInstance,
+  View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, KeyboardAvoidingView, RefreshControl,
+  type ScrollViewInstance,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAddComment, useComments, useIssue, useSetIssueStatus, useUpvote } from '@/hooks/useIssues';
+import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 import { useAuth } from '@/auth/AuthProvider';
 import { ErrorState, LoadingState } from '@/components/StateViews';
 import { CommentComposer, CommentList } from '@/components/Comments';
@@ -38,6 +40,8 @@ export default function IssueDetailScreen() {
   const { add, remove } = useUpvote();
   const comments = useComments(id);
   const addComment = useAddComment(id);
+  // Reloads the issue, its timeline and the comments.
+  const pull = usePullToRefresh(() => Promise.all([refetch(), comments.refetch()]));
 
   // Upvote tapped while logged out: remember it, send the user to /login, finish it on return.
   const pendingUpvote = useRef(false);
@@ -101,7 +105,21 @@ export default function IssueDetailScreen() {
 
   return (
     <KeyboardAvoidingView style={s.root} behavior="padding">
-      <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        ref={scrollRef}
+        style={s.scroll}
+        contentContainerStyle={s.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={pull.refreshing}
+            onRefresh={pull.onRefresh}
+            colors={[colors.accent]}
+            tintColor={colors.accent}
+            progressBackgroundColor={colors.surface}
+          />
+        }
+      >
         {issue.image_url ? (
           <Image source={{ uri: issue.image_url }} style={s.hero} />
         ) : (

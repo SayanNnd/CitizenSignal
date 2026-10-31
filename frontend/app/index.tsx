@@ -210,6 +210,7 @@ export default function HomeScreen() {
         isLoading={!ready || isPending}
         isError={isError}
         onRetry={refetch}
+        onRefresh={refetch}
         address={center.label}
         radiusLabel={radiusM >= 1000 ? `${radiusM / 1000} km` : `${radiusM} m`}
         focusedId={focusedIssueId}

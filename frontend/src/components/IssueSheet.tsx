@@ -3,6 +3,7 @@ import {
   Animated,
   FlatList,
   PanResponder,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -14,6 +15,7 @@ import type { Issue } from '../types';
 import { IssueCard } from './IssueCard';
 import { Icon } from './Icon';
 import { EmptyState, ErrorState, LoadingState } from './StateViews';
+import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { radius, shadow, spacing } from '../constants/theme';
 import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 
@@ -30,6 +32,8 @@ interface Props {
   isLoading: boolean;
   isError: boolean;
   onRetry: () => void;
+  /** Pull-to-refresh on the list. */
+  onRefresh: () => Promise<unknown>;
   address: string;
   radiusLabel: string;
   focusedId: string | null;
@@ -43,10 +47,11 @@ interface Props {
 }
 
 export function IssueSheet({
-  snap, onSnapChange, issues, isLoading, isError, onRetry, address, radiusLabel, focusedId,
+  snap, onSnapChange, issues, isLoading, isError, onRetry, onRefresh, address, radiusLabel, focusedId,
   onOpenSearch, onOpenIssue, floating,
 }: Props) {
   const { colors, s } = useThemed(makeStyles);
+  const pull = usePullToRefresh(onRefresh);
   const { height: windowH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const sheetH = Math.round(windowH * 0.9);
@@ -158,8 +163,6 @@ export function IssueSheet({
           <LoadingState label="Finding issues near you…" />
         ) : isError ? (
           <ErrorState message="Couldn't load issues." onRetry={onRetry} />
-        ) : issues.length === 0 ? (
-          <EmptyState title="No issues in this area" hint="Be the first to report one with the New Post button." />
         ) : (
           <FlatList
             ref={listRef}
@@ -172,7 +175,20 @@ export function IssueSheet({
             onScrollToIndexFailed={({ averageItemLength, index }) =>
               listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
             }
-            contentContainerStyle={s.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={pull.refreshing}
+                onRefresh={pull.onRefresh}
+                colors={[colors.accent]}
+                tintColor={colors.accent}
+                progressBackgroundColor={colors.surface}
+              />
+            }
+            // Inside the list (not instead of it) so an empty area can be pulled to refresh too.
+            ListEmptyComponent={
+              <EmptyState title="No issues in this area" hint="Be the first to report one with the New Post button." />
+            }
+            contentContainerStyle={[s.listContent, { flexGrow: 1 }]}
             showsVerticalScrollIndicator={false}
           />
         )}
