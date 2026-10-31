@@ -12,9 +12,9 @@ Time box: ~5 hours. Assumed start 11:45 → end 16:45. **Feature freeze 15:30.**
 | Topic | Decision |
 |---|---|
 | Platform | **Android only**, tested in Expo Go. No iOS work (no HEIC handling, no iOS-specific config). |
-| Auth | **Supabase Auth: Google only.** The app has no email/password login (removed; the Email provider can stay enabled in Supabase but the app never uses it). **Google** uses the **browser OAuth flow** (`supabase.auth.signInWithOAuth` + `expo-auth-session` + `expo-web-browser`), which works in Expo Go; `exp://**` is in Supabase's allowed redirect URLs. The Google consent screen is in **Testing** mode, so only Gmail accounts added as test users can sign in — send the demo accounts to the backend track. **Not allowed:** native Google Sign-In (`@react-native-google-signin` needs a dev build, won't run in Expo Go), other social providers, magic links (deep-link pain in Expo Go). The backend is unchanged: after any sign-in the app has a normal Supabase session and sends `Authorization: Bearer <access_token>`. |
+| Auth | **Supabase Auth, Google sign-in only** (changed from email + password). Email provider is off. Dashboard: Auth → Providers → Google enabled; Auth → URL Configuration → **Site URL `citizensignal://`** (not localhost — Supabase falls back to it when `redirectTo` isn't allowed) and **Redirect URLs `exp://**`** (Expo Go). App flow: `signInWithOAuth({ provider: 'google', options: { redirectTo: makeRedirectUri(), skipBrowserRedirect: true } })` → `WebBrowser.openAuthSessionAsync(url, redirectTo)` → `setSession` from the tokens in the returned URL. No magic links. |
 | What needs login | **Upvoting requires login.** Browsing the map/list is public. Reporting uses *optional* auth (user id attached if logged in). To make reporting login-only later, swap `optionalAuth` → `requireAuth` on one route. |
-| Token flow | App signs in with `@supabase/supabase-js` → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
+| Token flow | App signs in with Google via `@supabase/supabase-js` → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
 | Admin | None. Mark issues resolved in **Supabase Studio** (set `status='resolved'`, `resolved_at=now()`). |
 | Mandatory packages | **Zod, Multer, Sharp, Geolib, string-similarity** — all five used on the server, versions below. |
 
@@ -50,7 +50,8 @@ citizensignal/
 │   ├── sql/
 │   │   └── schema.sql            # tables + indexes + storage notes
 │   ├── scripts/
-│   │   └── seed.ts               # repeatable demo data (resolved pothole + neighbours)
+│   │   ├── seed.ts               # repeatable demo data (resolved pothole + neighbours, with photos)
+│   │   └── smoke.ts              # `npm run smoke`: end-to-end test of every write path (self-cleaning)
 │   └── src/
 │       ├── server.ts             # starts listening
 │       ├── app.ts                # express app, middleware, routes
@@ -89,7 +90,7 @@ citizensignal/
     │   │   ├── list.tsx          # Compact nearby list
     │   │   └── report.tsx        # Report form
     │   ├── issue/[id].tsx        # Detail + upvote + evidence
-    │   └── login.tsx             # Login / signup (opened when upvoting logged-out)
+    │   └── login.tsx             # "Sign in with Google" (opened when upvoting logged-out)
     └── src/
         ├── api/
         │   ├── client.ts         # fetch wrapper, adds Bearer token
@@ -111,8 +112,7 @@ citizensignal/
 
 ```
 npx expo install expo-router expo-location expo-image-picker expo-image-manipulator expo-constants \
-  react-native-maps @react-native-async-storage/async-storage react-native-url-polyfill \
-  expo-auth-session expo-web-browser
+  expo-auth-session expo-web-browser react-native-maps @react-native-async-storage/async-storage react-native-url-polyfill
 npm i @tanstack/react-query @supabase/supabase-js zod geolib
 ```
 
@@ -243,8 +243,8 @@ Two tracks + one shared contract. If there's a third peer, they take the **Float
 
 | Time | Track A — Backend | Track B — Frontend | Floating / All |
 |---|---|---|---|
-| 11:45–12:15 | Repo + Express skeleton, `/health`, env validation | Expo app scaffold, Expo Router tabs, env, supabase client | **All:** Supabase project, run `schema.sql`, create bucket, disable email confirm, pick LAN/tunnel URL, agree on §4 |
-| 12:15–13:30 | `GET /issues`, `POST /issues` happy path: Multer → Zod → Sharp → storage → insert; `requireAuth/optionalAuth` | Login/signup screen + AuthProvider; Map + List screens on **mock data** (`EXPO_PUBLIC_USE_MOCK=true`) | Seed script skeleton |
+| 11:45–12:15 | Repo + Express skeleton, `/health`, env validation | Expo app scaffold, Expo Router tabs, env, supabase client | **All:** Supabase project, run `schema.sql`, create bucket, enable Google provider + set Site URL / Redirect URLs (§1), pick LAN/tunnel URL, agree on §4 |
+| 12:15–13:30 | `GET /issues`, `POST /issues` happy path: Multer → Zod → Sharp → storage → insert; `requireAuth/optionalAuth` | Google sign-in screen + AuthProvider; Map + List screens on **mock data** (`EXPO_PUBLIC_USE_MOCK=true`) | Seed script skeleton |
 | 13:30–14:15 | `matching.service` (3 outcomes + reopen), `priority.service`, upvote/unvote endpoints | Report form: category, description, photo (picker + manipulator), GPS pin on map | Seed script: 1 resolved pothole + 3–4 neighbours |
 | 14:15–15:00 | Bug fixes from integration; `GET /issues/:id` with evidence | **Flip mock OFF**, wire real API; `DuplicateSheet` for `needs_confirmation`; upvote button with login gate | **Integration session #1** — full report flow on a real Android phone |
 | 15:00–15:30 | Edge cases: validation messages, big file, no GPS | Issue detail screen, loading/empty/error states | Tune priority weights |

@@ -20,7 +20,7 @@ function toHttpError(err: unknown): HttpError {
 
   if (err instanceof ZodError) {
     const details: ErrorDetail[] = err.issues.map((issue) => ({
-      field: issue.path.join('.'),
+      field: issue.path.map(String).join('.'),
       message: issue.message,
     }));
     return HttpError.validation('Validation failed', details);
