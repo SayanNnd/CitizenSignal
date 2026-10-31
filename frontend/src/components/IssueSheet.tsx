@@ -18,17 +18,8 @@ import { radius, shadow, spacing } from '../constants/theme';
 import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 
 export type Snap = 'collapsed' | 'half' | 'full';
-export type IssueFilter = 'all' | 'open' | 'resolved' | 'recurring';
-
-const FILTERS: { key: IssueFilter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'open', label: 'Open' },
-  { key: 'resolved', label: 'Resolved' },
-  { key: 'recurring', label: 'Recurring' },
-];
 
 const HEADER_H = 128; // handle + search bar + address line
-const CHIPS_H = 46;
 
 interface Props {
   snap: Snap;
@@ -40,9 +31,6 @@ interface Props {
   address: string;
   radiusLabel: string;
   focusedId: string | null;
-  filter: IssueFilter;
-  onFilterChange: (f: IssueFilter) => void;
-  counts: Record<IssueFilter, number>;
   onOpenSearch: () => void;
   onOpenIssue: (id: string) => void;
   /** Reported so the screen can place floating buttons just above the sheet. */
@@ -51,7 +39,7 @@ interface Props {
 
 export function IssueSheet({
   snap, onSnapChange, issues, isLoading, isError, onRetry, address, radiusLabel, focusedId,
-  filter, onFilterChange, counts, onOpenSearch, onOpenIssue, onVisibleHeight,
+  onOpenSearch, onOpenIssue, onVisibleHeight,
 }: Props) {
   const { colors, s } = useThemed(makeStyles);
   const { height: windowH } = useWindowDimensions();
@@ -123,7 +111,7 @@ export function IssueSheet({
     return () => clearTimeout(t);
   }, [focusedId, issues]);
 
-  const listHeight = Math.max(0, visible[snap] - HEADER_H - CHIPS_H);
+  const listHeight = Math.max(0, visible[snap] - HEADER_H);
 
   return (
     <Animated.View style={[s.sheet, { height: sheetH, transform: [{ translateY }] }]}>
@@ -136,38 +124,19 @@ export function IssueSheet({
         <View style={s.addressRow}>
           <Icon name="pin" size={15} color={colors.accent} />
           <Text style={s.address} numberOfLines={1}>{address}</Text>
-          <Text style={s.count}>{radiusLabel}</Text>
+          <Text style={s.count}>
+            {isLoading ? radiusLabel : `${issues.length} nearby  ·  ${radiusLabel}`}
+          </Text>
         </View>
       </View>
 
-      <View style={s.chips}>
-        {FILTERS.map((f) => {
-          const active = filter === f.key;
-          return (
-            <TouchableOpacity
-              key={f.key}
-              style={[s.chip, active && s.chipActive]}
-              onPress={() => onFilterChange(f.key)}
-              activeOpacity={0.8}
-            >
-              <Text style={[s.chipText, active && s.chipTextActive]}>{f.label}</Text>
-              <Text style={[s.chipCount, active && s.chipTextActive]}>{isLoading ? '-' : counts[f.key]}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <View style={{ height: listHeight }}>
+      <View style={[s.list, { height: listHeight }]}>
         {isLoading ? (
           <LoadingState label="Finding issues near you…" />
         ) : isError ? (
           <ErrorState message="Couldn't load issues." onRetry={onRetry} />
         ) : issues.length === 0 ? (
-          filter === 'all' ? (
-            <EmptyState title="No issues in this area" hint="Be the first to report one with the New Post button." />
-          ) : (
-            <EmptyState icon="list" title="Nothing matches this filter" hint="Try another filter or widen the search radius in Settings." />
-          )
+          <EmptyState title="No issues in this area" hint="Be the first to report one with the New Post button." />
         ) : (
           <FlatList
             ref={listRef}
@@ -199,32 +168,23 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
       backgroundColor: colors.bg,
       borderTopLeftRadius: radius.xl,
       borderTopRightRadius: radius.xl,
-      borderTopWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: colors.line,
       ...shadow.float,
     },
     header: { paddingHorizontal: spacing.lg, height: HEADER_H },
     handle: {
-      alignSelf: 'center', width: 44, height: 5, borderRadius: 3,
+      alignSelf: 'center', width: 40, height: 4, borderRadius: 2,
       backgroundColor: colors.line, marginTop: spacing.sm, marginBottom: spacing.md,
     },
     search: {
-      flexDirection: 'row', alignItems: 'center', gap: spacing.md, height: 46,
-      backgroundColor: colors.surface, borderRadius: radius.md, paddingHorizontal: spacing.lg,
-      borderWidth: 1.5, borderColor: colors.line,
+      flexDirection: 'row', alignItems: 'center', gap: spacing.md, height: 44,
+      backgroundColor: colors.surfaceAlt, borderRadius: radius.md, paddingHorizontal: spacing.lg,
     },
     searchText: { color: colors.muted, fontSize: 15 },
     addressRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm },
-    address: { flex: 1, fontSize: 14, fontWeight: '800', color: colors.ink },
+    address: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.ink },
     count: { ...type.mono, fontWeight: '700' },
-    chips: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.lg, height: CHIPS_H, alignItems: 'center' },
-    chip: {
-      flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: spacing.md,
-      borderRadius: radius.sm, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.surface,
-    },
-    chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
-    chipText: { fontSize: 12.5, fontWeight: '700', color: colors.inkSoft },
-    chipCount: { ...type.mono, fontWeight: '700' },
-    chipTextActive: { color: colors.surface },
-    listContent: { paddingTop: spacing.xs, paddingBottom: 120 },
+    list: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
+    listContent: { paddingBottom: 120 },
   });

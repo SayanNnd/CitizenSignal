@@ -96,11 +96,10 @@ export default function SettingsScreen() {
           onPress={() => (user ? signOut() : router.push('/login'))}
           activeOpacity={0.85}
         >
-          <Text style={[s.btnText, user && { color: colors.accent }]}>{user ? 'LOG OUT' : 'LOG IN'}</Text>
+          <Text style={[s.btnText, user && { color: colors.accent }]}>{user ? 'Log out' : 'Log in'}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={s.footer}>CITIZENSIGNAL  V1.0.0</Text>
     </ScrollView>
   );
 }
@@ -129,7 +128,7 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     radioDot: { width: 8, height: 8, borderRadius: 4 },
     tileLabel: { fontSize: 13, fontWeight: '800', color: colors.inkSoft },
     btn: { backgroundColor: colors.accent, borderRadius: radius.md, height: 48, alignItems: 'center', justifyContent: 'center' },
-    btnText: { color: colors.onAccent, fontWeight: '900', fontSize: 14, letterSpacing: 1.2 },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: 15 },
     segment: { flexDirection: 'row', gap: spacing.sm },
     option: {
       flex: 1, height: 42, borderRadius: radius.sm, backgroundColor: colors.bg, borderWidth: 1.5, borderColor: colors.line,
@@ -137,5 +136,4 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     },
     optionActive: { backgroundColor: colors.ink, borderColor: colors.ink },
     optionText: { fontFamily: type.mono.fontFamily, fontWeight: '800', color: colors.ink, fontSize: 13 },
-    footer: { ...type.mono, textAlign: 'center', marginTop: spacing.xxl, letterSpacing: 1.2 },
   });

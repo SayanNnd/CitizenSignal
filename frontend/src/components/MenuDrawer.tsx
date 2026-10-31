@@ -73,7 +73,6 @@ export function MenuDrawer({ visible, onClose, items, email }: Props) {
             ))}
           </View>
 
-          <Text style={s.footer}>Report it. Merge it. Fix it.</Text>
         </Animated.View>
       </View>
     </Modal>
@@ -104,5 +103,4 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
       alignItems: 'center', justifyContent: 'center',
     },
     itemLabel: { flex: 1, fontSize: 16, fontWeight: '800', color: colors.ink },
-    footer: { ...type.mono, marginTop: 'auto', textAlign: 'center' },
   });

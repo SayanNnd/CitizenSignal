@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEFAULT_RADIUS_M, MAX_RADIUS_M } from '../constants/limits';
 
 export interface Coords {
   latitude: number;
@@ -58,7 +59,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [isCurrent, setIsCurrent] = useState(true);
-  const [radius, setRadiusState] = useState(2000);
+  const [radius, setRadiusState] = useState(DEFAULT_RADIUS_M);
   const [recent, setRecent] = useState<Place[]>([]);
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
 
@@ -83,7 +84,7 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const [r, rec] = await Promise.all([AsyncStorage.getItem(RADIUS_KEY), AsyncStorage.getItem(RECENT_KEY)]);
-        if (r) setRadiusState(Number(r));
+        if (r) setRadiusState(Math.min(Math.max(Number(r) || DEFAULT_RADIUS_M, 1), MAX_RADIUS_M));
         if (rec) setRecent(JSON.parse(rec));
       } catch {
         // storage is only a convenience
@@ -94,8 +95,9 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   }, [locate]);
 
   const setRadius = useCallback((m: number) => {
-    setRadiusState(m);
-    AsyncStorage.setItem(RADIUS_KEY, String(m)).catch(() => {});
+    const clamped = Math.min(m, MAX_RADIUS_M);
+    setRadiusState(clamped);
+    AsyncStorage.setItem(RADIUS_KEY, String(clamped)).catch(() => {});
   }, []);
 
   const selectPlace = useCallback((place: Place) => {

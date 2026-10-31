@@ -21,7 +21,7 @@ import type { Category, Candidate } from '@/types';
 export default function ReportScreen() {
   const router = useRouter();
   const { colors, isDark, s } = useThemed(makeStyles);
-  const { userCoords, center } = useLocationContext();
+  const { userCoords, center, isCurrent } = useLocationContext();
   const { mutate: report, isPending } = useReportIssue();
 
   const [category, setCategory] = useState<Category>('pothole');
@@ -29,10 +29,17 @@ export default function ReportScreen() {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [coords, setCoords] = useState<Coords>(userCoords ?? center);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  // The server rejects a blank location (400), so never submit the fallback map centre unconfirmed:
+  // we need a GPS fix, a searched locality, or the user placing the pin themselves.
+  const [located, setLocated] = useState(!!userCoords || !isCurrent);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   // Follow the GPS fix if it arrives after the screen opened.
   useEffect(() => {
-    if (userCoords) setCoords(userCoords);
+    if (userCoords) {
+      setCoords(userCoords);
+      setLocated(true);
+    }
   }, [userCoords]);
 
   async function shrink(uri: string) {
@@ -41,6 +48,7 @@ export default function ReportScreen() {
       format: ImageManipulator.SaveFormat.JPEG,
     });
     setPhotoUri(resized.uri);
+    setPhotoError(null);
   }
 
   async function pickPhoto() {
@@ -71,6 +79,10 @@ export default function ReportScreen() {
   }
 
   function submit(overrides: Record<string, string> = {}) {
+    if (!located || !Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) {
+      Alert.alert('Location needed', 'Allow location access, or drag the pin to where the problem is.');
+      return;
+    }
     if (!photoUri) { Alert.alert('Photo required', 'Please attach a photo of the issue.'); return; }
     if (description.trim().length < 10) { Alert.alert('Description too short', 'Please write at least 10 characters.'); return; }
 
@@ -80,38 +92,40 @@ export default function ReportScreen() {
           setCandidates(res.candidates ?? []);
           return;
         }
-        const msg = res.outcome === 'reopened'
-          ? 'Issue reopened. It came back, so its recurrence count went up.'
-          : res.outcome === 'merged'
-          ? 'Your evidence was added to an existing issue.'
-          : 'New issue created.';
-        Alert.alert('Done', msg);
+        // merged and reopened read the same to users: their report joined an existing issue
+        const msg = res.outcome === 'created'
+          ? 'Your issue is posted.'
+          : 'Someone already reported this. Your report was added to it.';
+        Alert.alert('Thanks', msg);
         router.replace('/');
       },
       onError: (err: any) => {
-        const details = err?.data?.error?.details;
-        if (details?.length) {
-          Alert.alert('Validation error', details.map((d: any) => d.message).join('\n'));
-        } else {
+        const details: { field: string; message: string }[] = err?.data?.error?.details ?? [];
+        const photo = details.find((d) => d.field === 'photo');
+        if (photo) setPhotoError(photo.message);
+        const others = details.filter((d) => d.field !== 'photo');
+        if (others.length) {
+          Alert.alert('Validation error', others.map((d) => d.message).join('\n'));
+        } else if (!photo) {
           Alert.alert('Error', err.message ?? 'Something went wrong.');
         }
       },
     });
   }
 
-  const canSubmit = !isPending && description.trim().length >= 10 && !!photoUri;
+  const canSubmit = !isPending && description.trim().length >= 10 && !!photoUri && located;
 
   return (
     <KeyboardAvoidingView style={s.root} behavior="padding">
       <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        <Text style={s.label}>01  CATEGORY</Text>
+        <Text style={s.label}>Category</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           {CATEGORIES.map((c) => (
             <CategoryChip key={c} category={c} selected={category === c} onPress={() => setCategory(c)} />
           ))}
         </ScrollView>
 
-        <Text style={s.label}>02  WHAT'S WRONG?</Text>
+        <Text style={s.label}>What's wrong?</Text>
         <TextInput
           style={s.textInput}
           placeholder="Describe the issue (10 to 280 characters)"
@@ -124,7 +138,7 @@ export default function ReportScreen() {
         />
         <Text style={s.charCount}>{description.length}/280</Text>
 
-        <Text style={s.label}>03  PHOTO</Text>
+        <Text style={s.label}>Photo</Text>
         {photoUri ? (
           <View>
             <Image source={{ uri: photoUri }} style={s.photo} />
@@ -145,7 +159,9 @@ export default function ReportScreen() {
           </View>
         )}
 
-        <Text style={s.label}>04  LOCATION</Text>
+        {photoError ? <Text style={s.error}>{photoError}</Text> : null}
+
+        <Text style={s.label}>Location</Text>
         <View style={s.mapWrap}>
           <MapView
             style={StyleSheet.absoluteFill}
@@ -158,11 +174,18 @@ export default function ReportScreen() {
               coordinate={coords}
               draggable
               pinColor={colors.accent}
-              onDragEnd={(e) => setCoords(e.nativeEvent.coordinate)}
+              onDragEnd={(e) => {
+                setCoords(e.nativeEvent.coordinate);
+                setLocated(true);
+              }}
             />
           </MapView>
         </View>
-        <Text style={s.hint}>Hold and drag the pin to adjust the exact spot.</Text>
+        {located ? (
+          <Text style={s.hint}>Hold and drag the pin to adjust the exact spot.</Text>
+        ) : (
+          <Text style={s.error}>No GPS fix yet. Allow location access, or drag the pin to where the problem is.</Text>
+        )}
 
         <TouchableOpacity
           style={[s.submit, !canSubmit && s.submitDisabled]}
@@ -173,7 +196,7 @@ export default function ReportScreen() {
           {isPending ? (
             <ActivityIndicator color={colors.onAccent} />
           ) : (
-            <Text style={[s.submitText, !canSubmit && { color: colors.muted }]}>SUBMIT REPORT</Text>
+            <Text style={[s.submitText, !canSubmit && { color: colors.muted }]}>Post report</Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -193,7 +216,7 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
     content: { padding: spacing.lg, paddingBottom: 48 },
-    label: { ...type.label, marginTop: spacing.xl, marginBottom: spacing.sm },
+    label: { ...type.heading, marginTop: spacing.xl, marginBottom: spacing.sm },
     textInput: {
       borderWidth: 1.5, borderColor: colors.line, borderRadius: radius.lg, padding: spacing.md,
       fontSize: 15, color: colors.ink, backgroundColor: colors.surface, minHeight: 110,
@@ -215,10 +238,11 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
       height: 180, borderRadius: radius.lg, overflow: 'hidden', borderWidth: 1.5, borderColor: colors.line, ...shadow.card,
     },
     hint: { ...type.caption, marginTop: spacing.sm },
+    error: { color: colors.accent, fontSize: 13, fontWeight: '700', marginTop: spacing.sm },
     submit: {
-      backgroundColor: colors.accent, borderRadius: 18, height: 56, alignItems: 'center',
+      backgroundColor: colors.accent, borderRadius: radius.md, height: 52, alignItems: 'center',
       justifyContent: 'center', marginTop: spacing.xxl, ...shadow.float,
     },
     submitDisabled: { backgroundColor: colors.surfaceAlt, shadowOpacity: 0, elevation: 0 },
-    submitText: { color: colors.onAccent, fontSize: 15, fontWeight: '900', letterSpacing: 1.4 },
+    submitText: { color: colors.onAccent, fontSize: 16, fontWeight: '800' },
   });

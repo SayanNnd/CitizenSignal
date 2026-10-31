@@ -12,7 +12,7 @@ Time box: ~5 hours. Assumed start 11:45 → end 16:45. **Feature freeze 15:30.**
 | Topic | Decision |
 |---|---|
 | Platform | **Android only**, tested in Expo Go. No iOS work (no HEIC handling, no iOS-specific config). |
-| Auth | **Supabase Auth, email + password.** Turn **"Confirm email" OFF** in the Supabase dashboard (Auth → Providers → Email) so signup works instantly in the demo. No social login, no magic links (deep-link pain in Expo Go). |
+| Auth | **Supabase Auth: Google only.** The app has no email/password login (removed; the Email provider can stay enabled in Supabase but the app never uses it). **Google** uses the **browser OAuth flow** (`supabase.auth.signInWithOAuth` + `expo-auth-session` + `expo-web-browser`), which works in Expo Go; `exp://**` is in Supabase's allowed redirect URLs. The Google consent screen is in **Testing** mode, so only Gmail accounts added as test users can sign in — send the demo accounts to the backend track. **Not allowed:** native Google Sign-In (`@react-native-google-signin` needs a dev build, won't run in Expo Go), other social providers, magic links (deep-link pain in Expo Go). The backend is unchanged: after any sign-in the app has a normal Supabase session and sends `Authorization: Bearer <access_token>`. |
 | What needs login | **Upvoting requires login.** Browsing the map/list is public. Reporting uses *optional* auth (user id attached if logged in). To make reporting login-only later, swap `optionalAuth` → `requireAuth` on one route. |
 | Token flow | App signs in with `@supabase/supabase-js` → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
 | Admin | None. Mark issues resolved in **Supabase Studio** (set `status='resolved'`, `resolved_at=now()`). |
@@ -111,7 +111,8 @@ citizensignal/
 
 ```
 npx expo install expo-router expo-location expo-image-picker expo-image-manipulator expo-constants \
-  react-native-maps @react-native-async-storage/async-storage react-native-url-polyfill
+  react-native-maps @react-native-async-storage/async-storage react-native-url-polyfill \
+  expo-auth-session expo-web-browser
 npm i @tanstack/react-query @supabase/supabase-js zod geolib
 ```
 

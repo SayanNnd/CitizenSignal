@@ -71,6 +71,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 - Types in `src/types/` mirror the contract. Update them whenever the contract changes.
 - `EXPO_PUBLIC_USE_MOCK=true` serves fixtures from `src/api/mock.ts` so UI work doesn't block on the backend. Mock data must match the contract's shapes exactly.
 - Browsing and reporting work logged-out. **Upvote while logged-out → navigate to `/login`**, then return and complete the upvote.
+- Login: **"Continue with Google"** (browser OAuth via `supabase.auth.signInWithOAuth` + `expo-auth-session` + `expo-web-browser`, Expo Go compatible) as the **only** login (no email/password). Auth is real whenever Supabase is configured in `frontend/.env`, even with mock data; only with no Supabase config does it fall back to an instant fake user. Never use native Google Sign-In (needs a dev build). After any sign-in the app just uses the Supabase session; the API still takes `Authorization: Bearer <access_token>`.
 - Photo: get a JPEG from `expo-image-picker`, shrink with `expo-image-manipulator` before upload. No iOS-specific code.
 - Handle all four states on every data screen: loading, empty, error, success.
 - `StyleSheet` only. No styling frameworks, no new UI libraries.
@@ -84,7 +85,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 
 ## Out of scope — do not build
 
-Roles/admin portal, social login, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
+Roles/admin portal, social providers other than Google (Google is allowed — see `roadmap.md` §1), native Google Sign-In, magic links, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
 
 ## Decision log — `qa-backend.md` / `qa-frontend.md` (required on every task)
 

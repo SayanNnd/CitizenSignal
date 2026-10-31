@@ -56,11 +56,11 @@ export function CommentList({ comments, isLoading, isError, onRetry }: ListProps
           <View style={[s.avatar, { backgroundColor: avatarColor(c.author) }]}>
             <Text style={s.avatarText}>{c.author.charAt(0).toUpperCase()}</Text>
           </View>
-          <View style={[s.bubble, c.is_mine && s.bubbleMine]}>
-            <View style={s.metaRow}>
+          <View style={s.reply}>
+            <Text style={s.metaRow} numberOfLines={1}>
               <Text style={s.author}>{c.is_mine ? 'You' : c.author}</Text>
-              <Text style={s.time}>{timeAgo(c.created_at)}</Text>
-            </View>
+              <Text style={s.time}>{'  '}{timeAgo(c.created_at)}</Text>
+            </Text>
             <Text style={s.body}>{c.body}</Text>
           </View>
         </View>
@@ -134,21 +134,20 @@ export function CommentComposer({ loggedIn, pending, onLogin, onSubmit, bottomIn
 
 const makeStyles = ({ colors, type }: ThemeValues) =>
   StyleSheet.create({
-    list: { gap: spacing.md },
+    list: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
     note: { alignItems: 'center', gap: spacing.sm, padding: spacing.xl },
     noteText: { ...type.body, textAlign: 'center' },
-    comment: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
-    avatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-    avatarText: { color: white, fontWeight: '800', fontSize: 14 },
-    bubble: {
-      flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, borderTopLeftRadius: 4,
-      borderWidth: 1.5, borderColor: colors.line, padding: spacing.md,
+    comment: {
+      flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start', paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line,
     },
-    bubbleMine: { borderColor: colors.accent },
-    metaRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
-    author: { fontSize: 13, fontWeight: '800', color: colors.ink },
-    time: type.mono,
-    body: { fontSize: 14, color: colors.inkSoft, lineHeight: 20 },
+    avatar: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
+    avatarText: { color: white, fontWeight: '800', fontSize: 15 },
+    reply: { flex: 1 },
+    metaRow: { marginBottom: 2 },
+    author: { fontSize: 15, fontWeight: '800', color: colors.ink },
+    time: { fontSize: 14, color: colors.muted },
+    body: { fontSize: 15, color: colors.ink, lineHeight: 21 },
     composer: {
       flexDirection: 'row', alignItems: 'flex-end', gap: spacing.sm, paddingHorizontal: spacing.lg,
       paddingTop: spacing.md, backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.line,

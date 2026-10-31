@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View, Text, TextInput, StyleSheet, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/auth/AuthProvider';
 import { SignalMark } from '@/components/SignalMark';
@@ -11,56 +9,42 @@ import { useThemed, type ThemeValues } from '@/theme/ThemeProvider';
 export default function LoginScreen() {
   const router = useRouter();
   const { colors, s } = useThemed(makeStyles);
-  const { signIn, signUp } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const { signInWithGoogle } = useAuth();
   const [loading, setLoading] = useState(false);
 
-  async function handleSubmit() {
-    if (!email || !password) { Alert.alert('Required', 'Enter email and password.'); return; }
+  async function handleGoogle() {
     setLoading(true);
-    const fn = mode === 'signin' ? signIn : signUp;
-    const { error } = await fn(email.trim(), password);
+    const { error, cancelled } = await signInWithGoogle();
     setLoading(false);
-    if (error) { Alert.alert('Error', error); return; }
-    router.back();
+    if (cancelled) return;
+    if (error) {
+      Alert.alert('Google sign-in failed', error);
+      return;
+    }
+    router.back(); // the screen underneath (e.g. an issue) finishes what the user started
   }
 
-  const signin = mode === 'signin';
-
   return (
-    <KeyboardAvoidingView style={s.container} behavior="padding">
-      <View style={s.logo}><SignalMark size={72} /></View>
-      <Text style={s.title}>{signin ? 'Welcome back' : 'Join CitizenSignal'}</Text>
-      <Text style={s.subtitle}>
-        {signin ? 'Log in to upvote issues, comment and track your reports.' : 'Create an account to upvote, comment and follow issues.'}
-      </Text>
+    <View style={s.container}>
+      <View style={s.logo}><SignalMark size={80} /></View>
+      <Text style={s.title}>Join CitizenSignal</Text>
+      <Text style={s.subtitle}>Log in to upvote issues, comment and track your reports.</Text>
 
-      <TextInput
-        style={s.input}
-        placeholder="Email"
-        placeholderTextColor={colors.muted}
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={s.input}
-        placeholder="Password"
-        placeholderTextColor={colors.muted}
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TouchableOpacity style={s.submitBtn} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
-        {loading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={s.submitText}>{signin ? 'LOG IN' : 'SIGN UP'}</Text>}
+      <TouchableOpacity style={s.googleBtn} onPress={handleGoogle} disabled={loading} activeOpacity={0.85}>
+        {loading ? (
+          <ActivityIndicator color={colors.ink} />
+        ) : (
+          <>
+            <View style={s.gMark}><Text style={s.gText}>G</Text></View>
+            <Text style={s.googleText}>Continue with Google</Text>
+          </>
+        )}
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => setMode(signin ? 'signup' : 'signin')}>
-        <Text style={s.toggle}>{signin ? "Don't have an account? Sign up" : 'Already have an account? Log in'}</Text>
+
+      <TouchableOpacity style={s.later} onPress={() => router.back()} disabled={loading}>
+        <Text style={s.laterText}>Not now</Text>
       </TouchableOpacity>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -70,14 +54,13 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     logo: { alignSelf: 'center', marginBottom: spacing.lg },
     title: { ...type.display, textAlign: 'center' },
     subtitle: { ...type.body, textAlign: 'center', marginTop: spacing.xs, marginBottom: spacing.xxl },
-    input: {
-      borderWidth: 1.5, borderColor: colors.line, borderRadius: radius.md, padding: spacing.lg,
-      fontSize: 15, color: colors.ink, backgroundColor: colors.surface, marginBottom: spacing.md,
+    googleBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.md, height: 56,
+      borderRadius: radius.md, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, ...shadow.card,
     },
-    submitBtn: {
-      backgroundColor: colors.accent, borderRadius: 18, height: 56, alignItems: 'center',
-      justifyContent: 'center', marginTop: spacing.sm, marginBottom: spacing.lg, ...shadow.float,
-    },
-    submitText: { color: colors.onAccent, fontSize: 15, fontWeight: '900', letterSpacing: 1.4 },
-    toggle: { color: colors.accent, textAlign: 'center', fontSize: 14, fontWeight: '700' },
+    gMark: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#4285F4', alignItems: 'center', justifyContent: 'center' },
+    gText: { color: '#FFFFFF', fontWeight: '900', fontSize: 15, includeFontPadding: false },
+    googleText: { fontSize: 15, fontWeight: '800', color: colors.ink },
+    later: { alignItems: 'center', padding: spacing.lg, marginTop: spacing.sm },
+    laterText: { color: colors.muted, fontSize: 14, fontWeight: '700' },
   });

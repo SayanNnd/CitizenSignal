@@ -8,7 +8,7 @@ import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 const makeStyles = ({ colors, type }: ThemeValues) => ({
   wrap: { alignItems: 'center', justifyContent: 'center', padding: spacing.xl, gap: spacing.sm } as const,
   tile: {
-    width: 64, height: 64, borderRadius: 20, backgroundColor: colors.surfaceAlt,
+    width: 64, height: 64, borderRadius: 32, backgroundColor: colors.surfaceAlt,
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,
   } as const,
   title: { ...type.heading, textAlign: 'center' } as const,
@@ -44,7 +44,9 @@ export function EmptyState({ icon = 'pin', title, hint }: { icon?: IconName; tit
   );
 }
 
-export function ErrorState({ message = 'Something went wrong.', onRetry }: { message?: string; onRetry?: () => void }) {
+export function ErrorState({
+  message = 'Something went wrong.', onRetry, actionLabel = 'Try again',
+}: { message?: string; onRetry?: () => void; actionLabel?: string }) {
   const { colors, s } = useThemed(makeStyles);
   return (
     <View style={s.wrap}>
@@ -54,7 +56,7 @@ export function ErrorState({ message = 'Something went wrong.', onRetry }: { mes
       <Text style={s.title}>{message}</Text>
       {onRetry ? (
         <TouchableOpacity style={s.retry} onPress={onRetry} activeOpacity={0.8}>
-          <Text style={s.retryText}>Try again</Text>
+          <Text style={s.retryText}>{actionLabel}</Text>
         </TouchableOpacity>
       ) : null}
     </View>
