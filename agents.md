@@ -32,6 +32,8 @@ Several libraries here are new or changed recently (Express 5, Multer 2.x, Zod, 
 | `frontend/` | Track B | Backend work must not edit it |
 | `roadmap.md` §4 (API contract) | Both | Change only after telling the other track |
 | `checklist.md` | Both | Tick boxes only for things actually verified |
+| `qa-backend.md` | Track A | Backend decision log. Frontend work must not edit it |
+| `qa-frontend.md` | Track B | Frontend decision log. Backend work must not edit it |
 
 `backend/` and `frontend/` **never import from each other**. They communicate only through the HTTP contract.
 
@@ -84,6 +86,20 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 
 Roles/admin portal, social login, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
 
+## Decision log — `qa-backend.md` / `qa-frontend.md` (required on every task)
+
+Each track keeps its **own** decision log in the repo root: **Track A writes only `qa-backend.md`, Track B writes only `qa-frontend.md`.** Never edit the other track's file. At the end of **every task or prompt**, append one entry to your track's file before you finish. These files are our cheat sheet for judges' questions ("why did you choose X?"), so write for a human reader who wasn't there.
+
+Each entry has these fields, kept short (1–2 lines each):
+
+- **Task:** what you were asked to do.
+- **Decision:** the main design or implementation choice you made, and where it lives (file or function).
+- **Why:** the reason you picked it over the alternatives (name the alternative you rejected).
+- **Why it's good:** the concrete benefit (simplicity, speed, demo reliability, matches the contract).
+- **Fallbacks / limits:** small weaknesses, shortcuts, or known risks, and what we'd do with more time. Be honest — don't oversell.
+
+Rules: **append only** (add at the bottom, never edit or reorder earlier entries); one entry per task, grouping several small choices together. If a task had no real design choice (typo, rename), write a one-line entry saying so rather than skipping it. If you change the API contract (`roadmap.md` §4), also add a one-line note to the other track's file tagged `[ALL]`. Never put secrets or keys in these files. If two people work on the same track, `git pull --rebase` before appending.
+
 ## Git workflow
 
 - `main` is always runnable. Never commit directly to it after the first scaffold.
@@ -98,6 +114,7 @@ Roles/admin portal, social login, push notifications, AI image analysis, chat, p
 3. Matches the contract in `roadmap.md` §4 exactly (field names, status codes, error shape).
 4. Error and empty cases handled.
 5. Relevant item ticked in `checklist.md`.
+6. Entry appended to your track's log (`qa-backend.md` or `qa-frontend.md`): decision, why, why it's good, fallbacks.
 
 ## If you're an AI agent and unsure
 

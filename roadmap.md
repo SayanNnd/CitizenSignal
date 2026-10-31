@@ -39,6 +39,8 @@ citizensignal/
 ├── roadmap.md
 ├── agents.md
 ├── checklist.md
+├── qa-backend.md                 # Track A decision log (see agents.md)
+├── qa-frontend.md                # Track B decision log (see agents.md)
 ├── README.md
 │
 ├── backend/                      # Track A — owns everything in here
