@@ -92,3 +92,24 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Checked the Android source of react-native-maps: `setMapStyle(null)` is a no-op, so the dark style stayed; an empty JSON list resets to Google's default. Camera moves sent while the search screen covered the map were dropped, because the hidden map's native view is detached. Rejected: remounting the map with a new `key` on theme change (loses the user's camera position).
 - **Why it's good:** Theme switches are instant and keep the camera; the map always ends up on what the user picked, whichever screen they picked it from.
 - **Fallbacks / limits:** The 350 ms wait is tuned to the default stack animation; a slower device could still start the move slightly early. Not yet run on a phone.
+
+### Dark mode palette: midnight violet / berry — 17:30
+- **Task:** Use the given palette (#110e1b, #191528, #3c162f, #5c162e, #7c162e) for dark mode and adjust the other colours to fit.
+- **Decision:** `darkPalette` in `src/constants/theme.ts`: background #110e1b, surfaces #191528 (+ a derived #241d36 for inputs), dividers #5c162e, highlights #3c162f, accent #FF5C86 with dark #110e1b text on it, text tinted violet-white. The dark map style (`src/constants/mapStyle.ts`) was retinted to the same family, with #7c162e on main roads.
+- **Why:** Measured contrast first: #7c162e is 1.8:1 on the background, far below the 4.5:1 needed for text and icons, so it couldn't be the accent itself; a brighter amaranth from the same hue reaches 6.5:1. White text on that accent would be 2.9:1, so button text is dark.
+- **Why it's good:** Every text colour clears 4.5:1 on the dark background (ink 16.4, inkSoft 10.2, muted 6.1); the map no longer looks like a different app from the UI around it.
+- **Fallbacks / limits:** Category colours (pins, icons) are shared with light mode and weren't retuned. The light palette is unchanged. Not yet checked on a phone screen.
+
+### Softer dark-mode accent — 17:40
+- **Task:** The dark-mode pink accent was too strong.
+- **Decision:** `darkPalette.accent` changed from #FF5C86 to dusty rose #E0899F (`src/constants/theme.ts`).
+- **Why:** Same berry hue, saturation down from 100% to 58%. Rejected: mauve #C79BC0 (calmer, but too close to the violet surfaces to work as a highlight).
+- **Why it's good:** Calmer look, and contrast actually improves: 7.5:1 on the background, 7.5:1 for the dark button text on it.
+- **Fallbacks / limits:** Only the dark accent changed; light mode is untouched.
+
+### Light mode palette: blush pastels — 17:55
+- **Task:** Base the light theme on the given palette (#d8e2dc, #ffe5d9, #ffcad4, #f4acb7, #9d8189), like the dark one.
+- **Decision:** `lightPalette` in `src/constants/theme.ts`: background is a lightened Powder Petal, inputs Powder Petal, highlighted rows Pastel Pink, dividers Alabaster Grey; text is a mauve-tinted near-black, captions a deepened Dusty Mauve, accent a deep rose #A9455F with white text. Severity and success colours were darkened. The light map now has its own style in the same family (`LIGHT_MAP_STYLE`), with Cherry Blossom on main roads.
+- **Why:** Measured first: all five colours are under 4.5:1 as text (Dusty Mauve best at 3.3:1), so they can't carry text or the accent directly. Rejected: keeping Google's default map in light mode (its blues and greens clash with the blush UI).
+- **Why it's good:** Every text colour on the background clears 4.5:1 (ink 14.3, muted 5.2, accent 5.3, success 5.2, severity ≥ 4.5), and light and dark mode now both have a deliberate, matching map.
+- **Fallbacks / limits:** On the single highlighted Pastel Pink row, caption text drops to about 3.9:1. Category colours (pins, icons) are unchanged. Not yet checked on a phone screen.
