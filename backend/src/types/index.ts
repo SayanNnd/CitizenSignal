@@ -18,7 +18,7 @@ export type Status = (typeof STATUSES)[number];
 export interface AuthUser {
   id: string;
   email?: string;
-  /** Public display name for comments, e.g. "Meera K." (from the Google profile). */
+  /** Public display name for comments: "Meera K." from a profile name, else the email before the @. */
   name: string;
 }
 

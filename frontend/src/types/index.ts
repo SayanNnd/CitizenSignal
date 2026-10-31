@@ -70,6 +70,13 @@ export interface ReportResponse {
   candidates?: Candidate[];
 }
 
+/** `POST /api/auth/login`: signs in, creating the account first if the email is new. */
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  created: boolean;
+}
+
 export interface ApiError {
   error: {
     code: string;

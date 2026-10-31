@@ -113,3 +113,12 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Measured first: all five colours are under 4.5:1 as text (Dusty Mauve best at 3.3:1), so they can't carry text or the accent directly. Rejected: keeping Google's default map in light mode (its blues and greens clash with the blush UI).
 - **Why it's good:** Every text colour on the background clears 4.5:1 (ink 14.3, muted 5.2, accent 5.3, success 5.2, severity ≥ 4.5), and light and dark mode now both have a deliberate, matching map.
 - **Fallbacks / limits:** On the single highlighted Pastel Pink row, caption text drops to about 3.9:1. Category colours (pins, icons) are unchanged. Not yet checked on a phone screen.
+
+- **[ALL] 2026-10-31 (from Track A):** Contract §4 — added `POST /api/auth/login` `{ email, password }` → `{ access_token, refresh_token, created }` (200 signed in / 201 registered / 401 wrong password). Google sign-in removed.
+
+### Email + password login replaces Google — 2026-10-31
+- **Task:** Swap Google sign-in for a simple email + password form (same flow for new and returning users, no OTP).
+- **Decision:** `app/login.tsx` is now an email + password form with inline errors and a Show/Hide toggle. `AuthProvider.signIn` calls `login()` (`src/api/auth.ts`) and stores the returned tokens with `supabase.auth.setSession`, so token refresh and `apiFetch` work as before. Removed `src/auth/google.ts`, the `expo-auth-session` / `expo-web-browser` packages and the plugin in `app.json`. `USE_MOCK_AUTH` is now `USE_MOCK || !HAS_SUPABASE`, because login needs the backend. `AuthProvider` also clears "Your Issues" and refetches everything when the logged-in user changes.
+- **Why:** The Google flow needed four dashboard settings plus a deep link that Expo Router also handles, and it crashed in Expo Go (`ExpoCrypto` from `expo-auth-session`). Rejected keeping Google as a second option, since it would keep all of that for little gain.
+- **Why it's good:** No browser hop or redirect URLs, fewer native packages, and the pending-upvote return now just goes back one screen. Fixes the stale `has_upvoted` / other-user "Your Issues" bug found in the earlier review.
+- **Fallbacks / limits:** No "forgot password" (out of scope). With mock data the form signs in a fake user without checking the password. Not yet run on the phone with the Email provider on.

@@ -9,7 +9,7 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 
 - [ ] [ALL] Create repo, push `main`, add `backend/` and `frontend/` folders and the three .md files
 - [ ] [ALL] Create Supabase project
-- [x] [ALL] ~~Supabase Auth → Email provider → **"Confirm email" OFF**~~ — N/A: project uses Google OAuth only (email provider disabled)
+- [ ] [ALL] Supabase → Authentication → Sign In / Providers → **Email enabled** ("Confirm email" doesn't matter: the server creates accounts already confirmed)
 - [x] [ALL] Run `backend/sql/schema.sql` (issues, evidence, upvotes + indexes)
 - [x] [ALL] Create **public** storage bucket `issue-images`
 - [ ] [ALL] Decide network route: LAN IP or tunnel; write the URL in the team chat
@@ -29,6 +29,7 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 - [x] [A] `config/env.ts` validates env with Zod; server refuses to boot on missing vars
 - [x] [A] `middleware/error.ts` — one error shape
 - [x] [A] `middleware/auth.ts` — `requireAuth` and `optionalAuth` verified with a real token
+- [ ] [A] `POST /api/auth/login` — sign in or register in one call; 400 on bad input verified, success path needs the Email provider on
 - [x] [A] `GET /api/issues?lat&lng&radius_m` returns seeded/dummy rows sorted by priority
 - [x] [A] `middleware/upload.ts` — Multer memory storage, 5 MB cap, image types only
 - [x] [A] Zod schema for report; bad lat/lng/short description → 400 with `details[]`
@@ -37,7 +38,7 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 
 **Frontend**
 - [ ] [B] `lib/supabase.ts` with AsyncStorage session persistence
-- [ ] [B] `AuthProvider` + "Sign in with Google" (Supabase OAuth, `roadmap.md` §1) — lands back in the app, not on localhost
+- [ ] [B] `AuthProvider` + email/password login (`POST /api/auth/login`, `roadmap.md` §1) — new email registers, known email signs in, wrong password shows an error
 - [ ] [B] `api/client.ts` attaches Bearer token when logged in
 - [ ] [B] Map tab with markers (mock data)
 - [ ] [B] List tab with compact cards (mock data)

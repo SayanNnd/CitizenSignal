@@ -19,7 +19,7 @@ CitizenSignal is a civic issue map. People report infrastructure problems with a
 Several libraries here are new or changed recently (Express 5, Multer 2.x, Zod, Expo SDK / Expo Router, Supabase JS, TanStack Query), so memory-based answers are often outdated or wrong.
 
 - **Before writing code that calls a library API, fetch the current docs through the Context7 MCP server.** Add `use context7` to the prompt, or call its tools directly (resolve the library, then fetch its docs).
-- Always do this for: Express 5 (async error handling, routing changes), Multer 2.x, Sharp, Zod, Geolib, string-similarity, `@supabase/supabase-js` (auth + storage), `expo-auth-session` + `expo-web-browser` (Google sign-in), Expo Router, `expo-location`, `expo-image-picker`, `expo-image-manipulator`, `react-native-maps`, TanStack Query.
+- Always do this for: Express 5 (async error handling, routing changes), Multer 2.x, Sharp, Zod, Geolib, string-similarity, `@supabase/supabase-js` (auth + storage), Expo Router, `expo-location`, `expo-image-picker`, `expo-image-manipulator`, `react-native-maps`, TanStack Query.
 - Prefer version-specific docs that match what's in `package.json`. If Context7 and your memory disagree, **Context7 wins**.
 - If Context7 is unavailable, say so and fall back to the official docs site. Don't guess an API signature.
 - Setup (once per machine): add the server `@upstash/context7-mcp` to your agent/editor's MCP config, e.g. `npx -y @upstash/context7-mcp`. For Claude Code: `claude mcp add context7 -- npx -y @upstash/context7-mcp`.
@@ -72,7 +72,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 - Types in `src/types/` mirror the contract. Update them whenever the contract changes.
 - `EXPO_PUBLIC_USE_MOCK=true` serves fixtures from `src/api/mock.ts` so UI work doesn't block on the backend. Mock data must match the contract's shapes exactly.
 - Browsing and reporting work logged-out. **Upvote while logged-out → navigate to `/login`**, then return and complete the upvote.
-- Login: **"Continue with Google"** (browser OAuth via `supabase.auth.signInWithOAuth` + `expo-auth-session` + `expo-web-browser`, Expo Go compatible) as the **only** login (no email/password). Auth is real whenever Supabase is configured in `frontend/.env`, even with mock data; only with no Supabase config does it fall back to an instant fake user. Never use native Google Sign-In (needs a dev build). After any sign-in the app just uses the Supabase session; the API still takes `Authorization: Bearer <access_token>`.
+- Login: **email + password**, one form for both new and returning users. The app calls `POST /api/auth/login` (`src/api/auth.ts`), which signs in or creates the account (already confirmed, no OTP), then stores the tokens with `supabase.auth.setSession`. With mock data (`EXPO_PUBLIC_USE_MOCK=true`) or no Supabase config, the form signs in a fake user instead. The API takes `Authorization: Bearer <access_token>`.
 - Photo: get a JPEG from `expo-image-picker`, shrink with `expo-image-manipulator` before upload. No iOS-specific code.
 - Handle all four states on every data screen: loading, empty, error, success.
 - `StyleSheet` only. No styling frameworks, no new UI libraries.
@@ -86,7 +86,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 
 ## Out of scope — do not build
 
-Roles/admin portal, social login other than Google (see `roadmap.md` §1), email/password login, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
+Roles/admin portal, social login (Google etc.), email verification or OTP, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
 
 ## Decision log — `qa-backend.md` / `qa-frontend.md` (required on every task)
 

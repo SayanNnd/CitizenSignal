@@ -129,7 +129,7 @@ async function createTestUser(): Promise<{ id: string; token: string }> {
   const email = `smoke-${Date.now()}@citizensignal.test`;
   const { data, error } = await supabase.auth.admin.createUser({ email, email_confirm: true });
   if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
-  // Password login may be disabled (Google-only project); an admin magic link always works.
+  // An admin magic link works whatever login providers are enabled.
   const { data: link, error: linkError } = await supabase.auth.admin.generateLink({ type: 'magiclink', email });
   if (linkError) throw new Error(`generateLink failed: ${linkError.message}`);
   // Sign in on a separate client: verifyOtp stores the session on the client it runs on, which
