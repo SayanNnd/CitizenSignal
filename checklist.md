@@ -10,13 +10,13 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 - [ ] [ALL] Create repo, push `main`, add `backend/` and `frontend/` folders and the three .md files
 - [ ] [ALL] Create Supabase project
 - [ ] [ALL] Supabase Auth → Email provider → **"Confirm email" OFF**
-- [ ] [ALL] Run `backend/sql/schema.sql` (issues, evidence, upvotes + indexes)
-- [ ] [ALL] Create **public** storage bucket `issue-images`
+- [x] [ALL] Run `backend/sql/schema.sql` (issues, evidence, upvotes + indexes)
+- [x] [ALL] Create **public** storage bucket `issue-images`
 - [ ] [ALL] Decide network route: LAN IP or tunnel; write the URL in the team chat
 - [ ] [ALL] Everyone has Expo Go on an Android phone that matches the project's SDK (expo.dev/go if not)
-- [ ] [A] `backend/` scaffolded; installed: express@5, cors, dotenv, @supabase/supabase-js, **multer@^2.0.2, sharp, zod, geolib, string-similarity@4.0.4** (+ dev types)
+- [x] [A] `backend/` scaffolded; installed: express@5, cors, dotenv, @supabase/supabase-js, **multer@^2.0.2, sharp, zod, geolib, string-similarity@4.0.4** (+ dev types)
 - [ ] [A] `GET /api/health` returns 200 and is reachable **from a phone's browser**
-- [ ] [A] `.env` filled, `.env.example` committed
+- [x] [A] `.env` filled, `.env.example` committed
 - [ ] [B] `frontend/` scaffolded with Expo Router; app opens on a real phone
 - [ ] [B] Frontend deps installed with `npx expo install` (maps, location, picker, manipulator, async-storage, constants)
 - [ ] [B] `.env` has `EXPO_PUBLIC_API_URL`, Supabase URL + anon key, `EXPO_PUBLIC_USE_MOCK`
@@ -27,11 +27,11 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 
 **Backend**
 - [ ] [A] `config/env.ts` validates env with Zod; server refuses to boot on missing vars
-- [ ] [A] `middleware/error.ts` — one error shape
+- [x] [A] `middleware/error.ts` — one error shape
 - [ ] [A] `middleware/auth.ts` — `requireAuth` and `optionalAuth` verified with a real token
-- [ ] [A] `GET /api/issues?lat&lng&radius_m` returns seeded/dummy rows sorted by priority
-- [ ] [A] `middleware/upload.ts` — Multer memory storage, 5 MB cap, image types only
-- [ ] [A] Zod schema for report; bad lat/lng/short description → 400 with `details[]`
+- [x] [A] `GET /api/issues?lat&lng&radius_m` returns seeded/dummy rows sorted by priority
+- [x] [A] `middleware/upload.ts` — Multer memory storage, 5 MB cap, image types only
+- [x] [A] Zod schema for report; bad lat/lng/short description → 400 with `details[]`
 - [ ] [A] `image.service` — Sharp rotate + resize + WebP → bucket → public URL
 - [ ] [A] `POST /api/issues` happy path creates an issue + image (no matching yet)
 
@@ -46,13 +46,13 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 ## Phase 2 — The headline feature (13:30–14:15)
 
 **Backend**
-- [ ] [A] `config/matching.ts` holds every threshold
+- [x] [A] `config/matching.ts` holds every threshold
 - [ ] [A] `matching.service` — same category → bbox prefilter → Geolib distance → string-similarity
 - [ ] [A] Outcome `merged` (text ≥ 0.75 and ≤ 25 m): evidence row added, `evidence_count` +1
 - [ ] [A] Outcome `reopened` (matched issue was resolved): status → open, `recurrence_count` +1, `reopened_at` set
-- [ ] [A] Outcome `needs_confirmation` (text 0.50–0.75, ≤ 50 m): returns up to 3 `candidates`, saves **nothing**
+- [x] [A] Outcome `needs_confirmation` (text 0.50–0.75, ≤ 50 m): returns up to 3 `candidates`, saves **nothing**
 - [ ] [A] `confirm_issue_id` and `force_new=true` paths work
-- [ ] [A] `priority.service` — single formula, used by list + detail
+- [x] [A] `priority.service` — single formula, used by list + detail
 - [ ] [A] `POST/DELETE /api/issues/:id/upvote` — 401 without token, one vote per user, counter stays in sync
 
 **Frontend**
@@ -76,8 +76,8 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 
 ## Phase 4 — Hardening (15:00–15:30)
 
-- [ ] [A] Oversized or non-image upload → clean 400, server stays up
-- [ ] [A] Missing photo / missing GPS → clean 400
+- [x] [A] Oversized or non-image upload → clean 400, server stays up
+- [x] [A] Missing photo / missing GPS → clean 400
 - [ ] [A] Duplicate upvote doesn't 500
 - [ ] [A] Tune priority weights so the seeded ordering looks sensible
 - [ ] [B] Loading / empty / error states on map, list, detail
@@ -111,11 +111,11 @@ Nothing new after this line. Fixes only.
 
 | Package | Where it's used | Verified |
 |---|---|---|
-| Zod | Report body, list query, env validation | [ ] |
-| Multer (≥ 2.0.2) | `middleware/upload.ts` receives `photo` | [ ] |
+| Zod | Report body, list query, env validation | [x] |
+| Multer (≥ 2.0.2) | `middleware/upload.ts` receives `photo` | [x] |
 | Sharp | `image.service` — rotate, resize, WebP | [ ] |
-| Geolib | `matching.service` — distance in metres | [ ] |
-| string-similarity (4.0.4) | `matching.service` — description score | [ ] |
+| Geolib | `matching.service` — distance in metres | [x] |
+| string-similarity (4.0.4) | `matching.service` — description score | [x] |
 
 ## Cut line (if behind schedule, drop in this order)
 
