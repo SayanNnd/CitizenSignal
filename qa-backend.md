@@ -46,3 +46,24 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** (1) and (2) would have broken the demo silently (wrong location, or a real phone photo rejected). Postgres returns varying fractional-second digits, so string comparison isn't reliable for ordering.
 - **Why it's good:** Verified with a 25-case HTTP suite (all pass, no 5xx logged, DB unchanged afterwards), schema edge-case tests, `tsc --noEmit` clean, no secrets in the diff, `.env` ignored.
 - **Fallbacks / limits:** Still not verified live: `created`/`merged`/`reopened` writes, Sharp upload to the bucket, upvotes and `/mine` with a real token — needs a test user and a re-seed afterwards.
+
+### Backend status check (no code changes) — 14:21
+- **Task:** Report how much of the backend is done and whether it's bug-free.
+- **Decision:** No design choice. Re-verified read-only: `tsc --noEmit` clean; health, list (+ `q`/`status` filters), detail, 400/401/404 paths, Multer/Sharp rejection all correct against the live DB; seeded demo phrases score 0.823 (→ reopen) and 0.674 (→ needs_confirmation) as intended.
+- **Why:** Writes were deliberately not exercised — they mutate the shared demo DB and need a real test user.
+- **Why it's good:** Confirms every §4 endpoint exists and the error contract holds; remaining risk is isolated to the untested write paths.
+- **Fallbacks / limits:** Still unverified live: created/merged/reopened writes, Sharp→bucket upload, upvotes and `/mine` with a real token. Seed issues have no photos (`image_url` null). Resolved issues can outrank open ones in the list (resolved pothole 19 > open streetlight 10) — weight-tuning item.
+
+### Live write-path tests, risk fixes, Zod 4 — 14:37
+- **Task:** Test every write path live, fix the known risks, move to Zod 4 if worthwhile.
+- **Decision:** (1) `scripts/smoke.ts` (`npm run smoke`): 38 HTTP checks against a running server — created/merged/reopened/needs_confirmation, confirm/force_new, Sharp output (WebP, EXIF-rotated, ≤ 1280 px), upvotes, `/mine`, concurrency — with a throwaway user (admin magic link, since email login is off) in a random empty spot, cleaning up rows, photos and user afterwards. (2) Counters (`issues.service.ts`): `syncCounter` recounts `upvotes`/`evidence` rows and re-checks after writing; reopen is a conditional update (`status='resolved'` and unchanged `recurrence_count`), so parallel reports reopen once. (3) `matching.service.ts`: auto-merge picks the best match passing *both* thresholds, not just the top text score. (4) Seed draws a placeholder photo per issue/evidence through the real Sharp pipeline and empties the bucket on reset. (5) Zod 3 → 4.6 (`error` param, `z.uuid()`, `z.url()`, `z.prettifyError`).
+- **Why:** Read-modify-write counters lost increments under concurrent reports; a Postgres RPC/trigger would be atomic but needs SQL run by hand in the dashboard — rejected for now. Old matching asked "same issue?" when a 40 m look-alike outscored a clear 10 m match. Zod 4 is the current major (roadmap says "latest"), faster, and unifies error customisation.
+- **Why it's good:** All 38 checks pass on 3 consecutive runs, no 5xx. Behaviour diff of 38 schema edge cases between Zod 3 and 4: identical except a clearer message for non-string descriptions and stricter UUIDs. Demo detail screens now have photos.
+- **Fallbacks / limits:** Counter sync costs one extra count query per write and caps its re-check loop at 5. `z.uuid()` rejects non-RFC ids like `0000…0001` with 400 instead of 404 (real ids are v4). Seed placeholder font varies by OS. Smoke test needs the server running and uses the shared project (isolated by location, self-cleaning).
+
+### Docs: Google-only auth decision — 14:41
+- **Task:** Update roadmap/agents/checklist to the new auth decision.
+- **Decision:** `roadmap.md` §1: auth is Supabase **Google sign-in only** (email provider off), with Site URL `citizensignal://`, Redirect URLs `exp://**`, and the Expo flow (`signInWithOAuth` + `skipBrowserRedirect` → `openAuthSessionAsync` → `setSession`). Added `expo-auth-session`/`expo-web-browser` to the frontend install list; `agents.md` out-of-scope now excludes only *non-Google* social login and email/password; checklist "Confirm email" marked N/A and the login item reworded. Documented `npm run smoke`.
+- **Why:** Google was already set up in the dashboard and the docs still said "no social login". Login sent users to localhost because Supabase falls back to the Site URL when `redirectTo` is missing or not allow-listed — writing the exact settings down stops that recurring.
+- **Why it's good:** No backend change — `requireAuth`/`optionalAuth` verify any Supabase token; API contract §4 untouched.
+- **Fallbacks / limits:** Expo Go's `exp://` address changes with the laptop's IP — the `exp://**` wildcard covers that. A production build would use `citizensignal://` instead. Frontend code for the flow is Track B's and not in any branch yet.

@@ -19,7 +19,7 @@ CitizenSignal is a civic issue map. People report infrastructure problems with a
 Several libraries here are new or changed recently (Express 5, Multer 2.x, Zod, Expo SDK / Expo Router, Supabase JS, TanStack Query), so memory-based answers are often outdated or wrong.
 
 - **Before writing code that calls a library API, fetch the current docs through the Context7 MCP server.** Add `use context7` to the prompt, or call its tools directly (resolve the library, then fetch its docs).
-- Always do this for: Express 5 (async error handling, routing changes), Multer 2.x, Sharp, Zod, Geolib, string-similarity, `@supabase/supabase-js` (auth + storage), Expo Router, `expo-location`, `expo-image-picker`, `expo-image-manipulator`, `react-native-maps`, TanStack Query.
+- Always do this for: Express 5 (async error handling, routing changes), Multer 2.x, Sharp, Zod, Geolib, string-similarity, `@supabase/supabase-js` (auth + storage), `expo-auth-session` + `expo-web-browser` (Google sign-in), Expo Router, `expo-location`, `expo-image-picker`, `expo-image-manipulator`, `react-native-maps`, TanStack Query.
 - Prefer version-specific docs that match what's in `package.json`. If Context7 and your memory disagree, **Context7 wins**.
 - If Context7 is unavailable, say so and fall back to the official docs site. Don't guess an API signature.
 - Setup (once per machine): add the server `@upstash/context7-mcp` to your agent/editor's MCP config, e.g. `npx -y @upstash/context7-mcp`. For Claude Code: `claude mcp add context7 -- npx -y @upstash/context7-mcp`.
@@ -42,7 +42,8 @@ Several libraries here are new or changed recently (Express 5, Multer 2.x, Zod, 
 ```
 # backend
 cd backend && npm install && npm run dev      # tsx watch src/server.ts → http://0.0.0.0:4000
-npm run seed                                   # resets demo data (scripts/seed.ts)
+npm run seed                                   # resets demo data + photos (scripts/seed.ts)
+npm run smoke                                  # end-to-end test of every write path (server must be running)
 npx tsc --noEmit                               # type check
 
 # frontend
@@ -84,7 +85,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 
 ## Out of scope — do not build
 
-Roles/admin portal, social login, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
+Roles/admin portal, social login other than Google (see `roadmap.md` §1), email/password login, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
 
 ## Decision log — `qa-backend.md` / `qa-frontend.md` (required on every task)
 
