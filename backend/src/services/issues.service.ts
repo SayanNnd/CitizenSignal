@@ -114,22 +114,43 @@ async function getUpvotedIds(userId: string, issueIds: string[]): Promise<Set<st
   return new Set((data ?? []).map((r: { issue_id: string }) => r.issue_id));
 }
 
-/** Recounts votes from the `upvotes` table and stores the total on the issue. */
-async function syncUpvoteCount(issueId: string): Promise<IssueRow> {
-  const { count, error: countError } = await supabase
-    .from('upvotes')
-    .select('*', { count: 'exact', head: true })
-    .eq('issue_id', issueId);
-  if (countError) throw new Error(`Upvote count failed: ${countError.message}`);
+/** How a cached counter on `issues` is derived from a child table: `base + rows for this issue`. */
+const COUNTERS = {
+  upvotes: { table: 'upvotes', base: 0 },
+  evidence_count: { table: 'evidence', base: 1 }, // 1 = the issue's own first report
+} as const;
 
-  const { data, error } = await supabase
-    .from('issues')
-    .update({ upvotes: count ?? 0 })
-    .eq('id', issueId)
-    .select()
-    .single();
-  if (error) throw new Error(`Upvote counter update failed: ${error.message}`);
-  return data as IssueRow;
+/** Safety cap for `syncCounter`'s re-check loop; it normally finishes on the first pass. */
+const MAX_COUNTER_SYNC_ATTEMPTS = 5;
+
+async function countRows(table: 'upvotes' | 'evidence', issueId: string): Promise<number> {
+  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('issue_id', issueId);
+  if (error) throw new Error(`Counting ${table} failed: ${error.message}`);
+  return count ?? 0;
+}
+
+/**
+ * Recounts the child rows and stores the total on the issue. After writing it counts again and
+ * rewrites if the number moved, so when concurrent requests race, whoever writes last also
+ * re-checks — the stored counter always settles on the true count (no lost increments).
+ */
+async function syncCounter(issueId: string, column: keyof typeof COUNTERS): Promise<IssueRow> {
+  const { table, base } = COUNTERS[column];
+  let total = base + (await countRows(table, issueId));
+
+  for (let attempt = 1; ; attempt++) {
+    const { data, error } = await supabase
+      .from('issues')
+      .update({ [column]: total })
+      .eq('id', issueId)
+      .select()
+      .single();
+    if (error) throw new Error(`Updating ${column} failed: ${error.message}`);
+
+    const recount = base + (await countRows(table, issueId));
+    if (recount === total || attempt >= MAX_COUNTER_SYNC_ATTEMPTS) return data as IssueRow;
+    total = recount;
+  }
 }
 
 // ── reads ────────────────────────────────────────────────────────────────────
@@ -294,9 +315,8 @@ export async function reportIssue(input: ReportInput): Promise<ReportResponse> {
     if (plan.action === 'create') {
       return { outcome: 'created', issue: await createIssue(input, image) };
     }
-    const reopen = plan.target.status === 'resolved';
-    const issue = await addEvidence(plan.target, input, image, reopen);
-    return { outcome: reopen ? 'reopened' : 'merged', issue };
+    const { issue, reopened } = await addEvidence(plan.target, input, image);
+    return { outcome: reopened ? 'reopened' : 'merged', issue };
   } catch (err) {
     await deleteImage(image.path);
     throw err;
@@ -322,10 +342,34 @@ async function createIssue(input: ReportInput, image: UploadedImage): Promise<Is
 }
 
 /**
+ * Reopens a resolved issue. The update only applies while the row is still resolved, so when
+ * several reports hit the same resolved issue at once exactly one reopens it (recurrence +1)
+ * and the rest become plain merges. Returns whether this call did the reopen.
+ */
+async function reopenIfResolved(target: IssueRow): Promise<boolean> {
+  if (target.status !== 'resolved') return false;
+  const { data, error } = await supabase
+    .from('issues')
+    .update({ status: 'open', reopened_at: new Date().toISOString(), recurrence_count: target.recurrence_count + 1 })
+    .eq('id', target.id)
+    .eq('status', 'resolved')
+    .eq('recurrence_count', target.recurrence_count)
+    .select('id');
+  if (error) throw new Error(`Reopening issue failed: ${error.message}`);
+  return (data ?? []).length > 0;
+}
+
+/**
  * Attaches the report to an existing issue as evidence and bumps its counters.
  * If the issue was resolved, it is reopened and `recurrence_count` goes up.
+ * Counters are recounted / conditionally updated rather than read-modify-written,
+ * so concurrent reports can't lose an increment.
  */
-async function addEvidence(target: IssueRow, input: ReportInput, image: UploadedImage, reopen: boolean): Promise<Issue> {
+async function addEvidence(
+  target: IssueRow,
+  input: ReportInput,
+  image: UploadedImage,
+): Promise<{ issue: Issue; reopened: boolean }> {
   const { data: evidenceRow, error: evidenceError } = await supabase
     .from('evidence')
     .insert({
@@ -340,22 +384,19 @@ async function addEvidence(target: IssueRow, input: ReportInput, image: Uploaded
     .single();
   if (evidenceError) throw new Error(`Evidence insert failed: ${evidenceError.message}`);
 
-  const updates: Partial<IssueRow> = { evidence_count: target.evidence_count + 1 };
-  if (reopen) {
-    updates.status = 'open';
-    updates.reopened_at = new Date().toISOString();
-    updates.recurrence_count = target.recurrence_count + 1;
-  }
-
-  const { data, error } = await supabase.from('issues').update(updates).eq('id', target.id).select().single();
-  if (error) {
+  let reopened: boolean;
+  let row: IssueRow;
+  try {
+    reopened = await reopenIfResolved(target);
+    row = await syncCounter(target.id, 'evidence_count');
+  } catch (err) {
     // Don't leave an evidence row pointing at the photo the caller is about to delete.
     await supabase.from('evidence').delete().eq('id', evidenceRow.id);
-    throw new Error(`Issue update failed: ${error.message}`);
+    throw err;
   }
 
   const has_upvoted = input.userId ? (await getUpvotedIds(input.userId, [target.id])).has(target.id) : false;
-  return toIssue(data as IssueRow, has_upvoted);
+  return { issue: toIssue(row, has_upvoted), reopened };
 }
 
 // ── upvotes ──────────────────────────────────────────────────────────────────
@@ -368,7 +409,7 @@ export async function addUpvote(issueId: string, userId: string): Promise<Issue>
   // Already voted → not an error; just return the current state.
   if (error && error.code !== UNIQUE_VIOLATION) throw new Error(`Upvote failed: ${error.message}`);
 
-  return toIssue(await syncUpvoteCount(issueId), true);
+  return toIssue(await syncCounter(issueId, 'upvotes'), true);
 }
 
 /** Removes the caller's vote. Idempotent: removing a vote that isn't there is fine. */
@@ -378,5 +419,5 @@ export async function removeUpvote(issueId: string, userId: string): Promise<Iss
   const { error } = await supabase.from('upvotes').delete().eq('issue_id', issueId).eq('user_id', userId);
   if (error) throw new Error(`Removing upvote failed: ${error.message}`);
 
-  return toIssue(await syncUpvoteCount(issueId), false);
+  return toIssue(await syncCounter(issueId, 'upvotes'), false);
 }

@@ -5,11 +5,13 @@
  *   npm run seed                      # seeds around the default location (New Delhi)
  *   npm run seed -- <lat> <lng>       # seeds around your demo location
  *
- * Clears ALL existing issues, evidence and upvotes before inserting.
+ * Clears ALL existing issues, evidence, upvotes and stored photos before inserting.
+ * Every seeded issue and evidence row gets a generated placeholder photo.
  */
+import sharp from 'sharp';
 import { z } from 'zod';
 import { supabase } from '../src/config/supabase.js';
-import { IMAGE_BUCKET } from '../src/services/image.service.js';
+import { IMAGE_BUCKET, processAndUploadImage } from '../src/services/image.service.js';
 import { generateTitle } from '../src/services/issues.service.js';
 import type { Category, Status } from '../src/types/index.js';
 
@@ -125,6 +127,47 @@ async function ensureBucket() {
   console.log(`  ✓ bucket "${IMAGE_BUCKET}" created (public)`);
 }
 
+/** Placeholder colour per category, so seeded photos are easy to tell apart. */
+const CATEGORY_COLOURS: Record<Category, string> = {
+  pothole: '#6d4c41',
+  streetlight: '#283593',
+  garbage: '#2e7d32',
+  water_leak: '#0277bd',
+  drainage: '#00695c',
+  road_damage: '#4e342e',
+  other: '#455a64',
+};
+
+function escapeXml(text: string): string {
+  return text.replace(/[<>&'"]/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
+/** Draws a simple labelled placeholder and uploads it through the real Sharp → bucket pipeline. */
+async function placeholderPhoto(category: Category, caption: string): Promise<string> {
+  const label = category.replace(/_/g, ' ').toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1200">
+    <rect width="100%" height="100%" fill="${CATEGORY_COLOURS[category]}"/>
+    <text x="50%" y="46%" font-family="sans-serif" font-size="140" font-weight="bold" fill="#fff" text-anchor="middle">${label}</text>
+    <text x="50%" y="58%" font-family="sans-serif" font-size="56" fill="#fff" fill-opacity="0.85" text-anchor="middle">${escapeXml(caption)}</text>
+    <text x="50%" y="92%" font-family="sans-serif" font-size="40" fill="#fff" fill-opacity="0.6" text-anchor="middle">CitizenSignal demo photo</text>
+  </svg>`;
+  const png = await sharp(Buffer.from(svg)).png().toBuffer();
+  return (await processAndUploadImage(png)).publicUrl;
+}
+
+/** Removes every stored photo; the rows that pointed at them are wiped by `clearTables`. */
+async function clearBucket() {
+  for (;;) {
+    const { data, error } = await supabase.storage.from(IMAGE_BUCKET).list('', { limit: 1000 });
+    if (error) throw new Error(`Listing photos failed: ${error.message}`);
+    // Folder placeholders have no id; only files can be removed.
+    const paths = (data ?? []).filter((f) => f.id).map((f) => f.name);
+    if (!paths.length) return;
+    const { error: removeError } = await supabase.storage.from(IMAGE_BUCKET).remove(paths);
+    if (removeError) throw new Error(`Removing photos failed: ${removeError.message}`);
+  }
+}
+
 async function clearTables() {
   // PostgREST refuses unfiltered deletes, so filter on something that's always true.
   for (const [table, column] of [['upvotes', 'issue_id'], ['evidence', 'id'], ['issues', 'id']] as const) {
@@ -143,6 +186,7 @@ async function seed() {
 
   console.log('🌱  Clearing existing data…');
   await clearTables();
+  await clearBucket();
 
   console.log('🌱  Inserting seed issues…');
   for (const s of SEED) {
@@ -158,6 +202,7 @@ async function seed() {
         latitude,
         longitude,
         status: s.status,
+        image_url: await placeholderPhoto(s.category, 'Original report'),
         upvotes: s.upvotes,
         evidence_count: 1 + s.evidence.length,
         recurrence_count: s.recurrence_count,
@@ -170,10 +215,12 @@ async function seed() {
     if (error) throw new Error(`Inserting ${s.label} failed: ${error.message}`);
 
     if (s.evidence.length) {
+      const photos = await Promise.all(s.evidence.map((_, i) => placeholderPhoto(s.category, `Evidence #${i + 1}`)));
       const { error: evidenceError } = await supabase.from('evidence').insert(
         s.evidence.map((description, i) => ({
           issue_id: issue.id,
           description,
+          image_url: photos[i],
           latitude: latitude + 0.00002 * (i + 1),
           longitude,
           created_at: daysAgo(Math.max(0, s.createdDaysAgo - (i + 1))),

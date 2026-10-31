@@ -74,10 +74,10 @@ export async function findMatches(
   // Best by text score, then by proximity.
   scored.sort((a, b) => b.text_score - a.text_score || a.distance_m - b.distance_m);
 
-  const best = scored[0];
-  if (best.text_score >= AUTO_MERGE_TEXT && best.distance_m <= AUTO_MERGE_METRES) {
-    return { kind: 'auto', match: best };
-  }
+  // Auto-merge into the best match that passes BOTH thresholds — not only the top text score,
+  // which may be a similar issue further away (26–50 m) next to a clear match within 25 m.
+  const auto = scored.find((m) => m.text_score >= AUTO_MERGE_TEXT && m.distance_m <= AUTO_MERGE_METRES);
+  if (auto) return { kind: 'auto', match: auto };
 
   return { kind: 'candidates', matches: scored.slice(0, MAX_CANDIDATES) };
 }
