@@ -45,5 +45,9 @@ create table if not exists upvotes (
 create index if not exists issues_lat_lng on issues (latitude, longitude);
 create index if not exists issues_status on issues (status);
 create index if not exists evidence_issue_id on evidence (issue_id);
+-- GET /issues/mine: issues a user reported or contributed evidence to
+create index if not exists issues_created_by on issues (created_by);
+create index if not exists evidence_created_by on evidence (created_by);
 
--- Storage bucket: create manually in Supabase dashboard as PUBLIC bucket named "issue-images"
+-- Storage bucket: PUBLIC bucket named "issue-images". `npm run seed` creates it if missing
+-- (or create it manually in the Supabase dashboard).
