@@ -15,6 +15,7 @@ create table if not exists issues (
   upvotes          int not null default 0,
   evidence_count   int not null default 1,
   recurrence_count int not null default 0,
+  comment_count    int not null default 0,
   created_by       uuid references auth.users(id) on delete set null,
   created_at       timestamptz not null default now(),
   resolved_at      timestamptz,
@@ -41,6 +42,19 @@ create table if not exists upvotes (
   primary key (issue_id, user_id)
 );
 
+-- Comments table (author is a display name taken from the verified token, never from the request body)
+create table if not exists comments (
+  id         uuid primary key default gen_random_uuid(),
+  issue_id   uuid not null references issues(id) on delete cascade,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  author     text not null,
+  body       text not null check (char_length(body) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+-- Projects created before comments existed: add the cached counter (safe to re-run).
+alter table issues add column if not exists comment_count int not null default 0;
+
 -- Indexes
 create index if not exists issues_lat_lng on issues (latitude, longitude);
 create index if not exists issues_status on issues (status);
@@ -48,6 +62,7 @@ create index if not exists evidence_issue_id on evidence (issue_id);
 -- GET /issues/mine: issues a user reported or contributed evidence to
 create index if not exists issues_created_by on issues (created_by);
 create index if not exists evidence_created_by on evidence (created_by);
+create index if not exists comments_issue_id on comments (issue_id, created_at);
 
 -- Storage bucket: PUBLIC bucket named "issue-images". `npm run seed` creates it if missing
 -- (or create it manually in the Supabase dashboard).

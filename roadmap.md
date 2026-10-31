@@ -150,11 +150,15 @@ Statuses: `open`, `resolved`.
 | POST | `/issues` | optional | Report (multipart). Runs the matching pipeline. |
 | POST | `/issues/:id/upvote` | **required** | Add upvote (one per user per issue) |
 | DELETE | `/issues/:id/upvote` | **required** | Remove upvote |
+| GET | `/issues/:id/comments` | optional | `{ comments: Comment[] }`, oldest first (max 200). `is_mine` is true for the caller's own comments. |
+| POST | `/issues/:id/comments` | **required** | JSON `{ body }` (1–500 chars after trim) → **201** `{ comment }`. Author comes from the token, never the body. |
 
 **`GET /issues` query:** `lat`, `lng` (required); `radius_m` (default 2000, max 20000); optional `q` (≤ 100 chars; every word must appear in title or description, case-insensitive, punctuation ignored), `category`, `status`. Invalid values → 400 `VALIDATION_ERROR`.
 
 **Issue object** (list + detail):
-`id, category, title, description, latitude, longitude, status, image_url, upvotes, evidence_count, recurrence_count, priority, days_open, created_at, resolved_at, reopened_at, has_upvoted`
+`id, category, title, description, latitude, longitude, status, image_url, upvotes, evidence_count, recurrence_count, comment_count, priority, days_open, created_at, resolved_at, reopened_at, has_upvoted`
+
+**Comment object:** `id, issue_id, author, body, created_at, is_mine`. `author` is a public display name built from the Google profile ("Meera K."; "Citizen" if the profile has no name). It is never derived from the email.
 
 **MyIssue object** (`/issues/mine`): Issue + `my_role`: `"reporter"` (caller created it) or `"contributor"` (caller's report was merged into it, including reopening it). Logged-out reports have no owner, so they never appear here.
 
@@ -188,15 +192,17 @@ Confirmation flow is **stateless**: the app re-submits the same form with `confi
 | `upvotes` | int, default 0 |
 | `evidence_count` | int, default 1 |
 | `recurrence_count` | int, default 0 |
+| `comment_count` | int, default 0 (cached count of `comments` rows) |
 | `created_by` | uuid, nullable (auth user) |
 | `created_at`, `resolved_at`, `reopened_at` | timestamptz |
 
 **`evidence`** — `id`, `issue_id` (FK), `description`, `image_url`, `latitude`, `longitude`, `created_by` (nullable), `created_at`
 **`upvotes`** — `issue_id` (FK), `user_id` (uuid, FK to `auth.users`), `created_at`, **primary key `(issue_id, user_id)`** → one vote per user, enforced by the DB.
+**`comments`** — `id`, `issue_id` (FK, cascade), `user_id` (FK to `auth.users`), `author` (display name), `body` (1–500 chars), `created_at`.
 
-Indexes: `issues(latitude, longitude)`, `issues(status)`, `evidence(issue_id)`.
+Indexes: `issues(latitude, longitude)`, `issues(status)`, `evidence(issue_id)`, `comments(issue_id, created_at)`.
 Storage: public bucket **`issue-images`**.
-The `upvotes` counter on `issues` is updated by the server in the same request as the insert/delete into the `upvotes` table.
+The `upvotes`, `evidence_count` and `comment_count` counters on `issues` are updated by the server in the same request as the insert/delete into the child table.
 
 ---
 
@@ -258,9 +264,9 @@ Two tracks + one shared contract. If there's a third peer, they take the **Float
 
 ## 9. Demo script (3 minutes)
 
-1. Open the map: seeded issues, sorted by priority. (15 s)
-2. Open a **resolved** pothole to show its history. (15 s)
-3. Report a new issue at that spot, similar wording, with a photo → app says "this pothole came back — reopened", recurrence badge shows 1. (60 s)
+1. Open the map: seeded issues, sorted by priority. Point out that the seeded **resolved** pothole is *not* on the map — the app shows open issues only. (15 s)
+2. Report a new issue at that spot, similar wording, with a photo → app says **"It came back"** (the old issue was reopened). (60 s)
+3. Open it from the feed: "Came back after being fixed" badge, and the timeline reads Reported → Fixed → Reported again → Came back. (15 s)
 4. Report another with vague wording nearby → **"Is this the same issue?"** sheet → confirm → evidence added. (45 s)
 5. Tap upvote logged-out → login prompt → log in → upvote → priority rises. (30 s)
 6. Close: aging priority + duplicate detection = fewer repeated complaints, faster fixes. (15 s)
