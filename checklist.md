@@ -29,7 +29,7 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 - [x] [A] `config/env.ts` validates env with Zod; server refuses to boot on missing vars
 - [x] [A] `middleware/error.ts` — one error shape
 - [x] [A] `middleware/auth.ts` — `requireAuth` and `optionalAuth` verified with a real token
-- [ ] [A] `POST /api/auth/login` — sign in or register in one call; 400 on bad input verified, success path needs the Email provider on
+- [x] [A] `POST /api/auth/login` — sign in or register in one call (verified live: register 201, login 200, wrong password 401, bad input 400)
 - [x] [A] `GET /api/issues?lat&lng&radius_m` returns seeded/dummy rows sorted by priority
 - [x] [A] `middleware/upload.ts` — Multer memory storage, 5 MB cap, image types only
 - [x] [A] Zod schema for report; bad lat/lng/short description → 400 with `details[]`

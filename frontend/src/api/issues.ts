@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, apiUpload } from './client';
 import {
   mockListIssues, mockGetIssue, mockReportIssue, mockListMyIssues, mockSetUpvote, mockListComments, mockAddComment,
 } from './mock';
@@ -29,7 +29,7 @@ export async function getIssue(id: string): Promise<{ issue: Issue; evidence: Ev
 
 export async function reportIssue(formData: FormData): Promise<ReportResponse> {
   if (USE_MOCK) return mockReportIssue(formData);
-  return apiFetch('/api/issues', { method: 'POST', body: formData });
+  return apiUpload('/api/issues', formData);
 }
 
 export async function addUpvote(issueId: string): Promise<{ issue: Issue }> {

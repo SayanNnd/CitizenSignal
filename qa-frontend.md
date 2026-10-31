@@ -122,3 +122,10 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** The Google flow needed four dashboard settings plus a deep link that Expo Router also handles, and it crashed in Expo Go (`ExpoCrypto` from `expo-auth-session`). Rejected keeping Google as a second option, since it would keep all of that for little gain.
 - **Why it's good:** No browser hop or redirect URLs, fewer native packages, and the pending-upvote return now just goes back one screen. Fixes the stale `has_upvoted` / other-user "Your Issues" bug found in the earlier review.
 - **Fallbacks / limits:** No "forgot password" (out of scope). With mock data the form signs in a fake user without checking the password. Not yet run on the phone with the Email provider on.
+
+### Photo upload failed with "Unsupported FormDataPart implementation" — 2026-10-31
+- **Task:** Reporting an issue failed on the phone; make sure it can't happen in the final run.
+- **Decision:** The report upload now goes through `apiUpload` (`src/api/client.ts`, a React Native `XMLHttpRequest`) instead of `fetch`. All JSON calls still use `apiFetch`.
+- **Why:** In SDK 58 the global `fetch` is `expo/fetch`, whose multipart encoder only accepts strings and Blobs, not React Native's `{ uri, name, type }` file part, so every photo upload threw. React Native's XHR still streams a local file from its `uri`. Rejected: `EXPO_PUBLIC_USE_RN_FETCH=1`, the documented opt-out, because it only works if every teammate's `.env` has it, and a missing line silently brings the bug back.
+- **Why it's good:** A fix in code, with no config to forget. Verified on two Android phones in Expo Go through the app's real `reportIssue`: the same shrink-to-local-file path the report screen uses created an issue with its photo (test rows and photos deleted afterwards). Error shape and handling on the report screen are unchanged.
+- **Fallbacks / limits:** Phones that were open before the change kept running old code until reloaded; this caused a confusing second failure during testing. Upload timeout is 60 s. `manipulateAsync` is deprecated in SDK 58 but still works.
