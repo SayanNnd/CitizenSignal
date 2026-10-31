@@ -17,3 +17,9 @@ export const DARK_MAP_STYLE = [
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0a1016' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4a5865' }] },
 ];
+
+/**
+ * Default Google style. Must be an empty list, not undefined: react-native-maps ignores an undefined
+ * style on Android, so switching back from dark mode would leave the dark style in place.
+ */
+export const LIGHT_MAP_STYLE: typeof DARK_MAP_STYLE = [];

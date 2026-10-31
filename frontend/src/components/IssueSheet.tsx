@@ -20,6 +20,8 @@ import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 export type Snap = 'collapsed' | 'half' | 'full';
 
 const HEADER_H = 128; // handle + search bar + address line
+/** Room above the sheet for the floating map buttons (two 48px buttons + gap + margin). */
+const FLOAT_H = 48 * 2 + 12 + 12;
 
 interface Props {
   snap: Snap;
@@ -33,13 +35,16 @@ interface Props {
   focusedId: string | null;
   onOpenSearch: () => void;
   onOpenIssue: (id: string) => void;
-  /** Reported so the screen can place floating buttons just above the sheet. */
-  onVisibleHeight?: (h: number) => void;
+  /**
+   * Map buttons that ride on top of the sheet. They share the sheet's animation, so they glide
+   * with it while dragging and fade out as it reaches the top, instead of remounting and jumping.
+   */
+  floating?: React.ReactNode;
 }
 
 export function IssueSheet({
   snap, onSnapChange, issues, isLoading, isError, onRetry, address, radiusLabel, focusedId,
-  onOpenSearch, onOpenIssue, onVisibleHeight,
+  onOpenSearch, onOpenIssue, floating,
 }: Props) {
   const { colors, s } = useThemed(makeStyles);
   const { height: windowH } = useWindowDimensions();
@@ -62,8 +67,14 @@ export function IssueSheet({
   useEffect(() => {
     base.current = offsetFor(snap);
     Animated.spring(translateY, { toValue: base.current, useNativeDriver: true, bounciness: 4, speed: 14 }).start();
-    onVisibleHeight?.(visible[snap]);
-  }, [snap, offsetFor, translateY, visible, onVisibleHeight]);
+  }, [snap, offsetFor, translateY]);
+
+  // Buttons fade out over the last stretch before the sheet is fully open.
+  const floatOpacity = translateY.interpolate({
+    inputRange: [offsetFor('full'), offsetFor('full') + FLOAT_H],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
 
   const snapRef = useRef(snap);
   snapRef.current = snap;
@@ -114,6 +125,18 @@ export function IssueSheet({
   const listHeight = Math.max(0, visible[snap] - HEADER_H);
 
   return (
+    <>
+      {floating ? (
+        // Same geometry as the sheet plus FLOAT_H on top, so the buttons stay inside its bounds
+        // (Android doesn't deliver touches to children drawn outside their parent).
+        <Animated.View
+          pointerEvents={snap === 'full' ? 'none' : 'box-none'}
+          style={[s.floatWrap, { height: sheetH + FLOAT_H, opacity: floatOpacity, transform: [{ translateY }] }]}
+        >
+          <View style={s.floatButtons} pointerEvents="box-none">{floating}</View>
+        </Animated.View>
+      ) : null}
+
     <Animated.View style={[s.sheet, { height: sheetH, transform: [{ translateY }] }]}>
       <View {...pan.panHandlers} style={s.header}>
         <View style={s.handle} />
@@ -155,6 +178,7 @@ export function IssueSheet({
         )}
       </View>
     </Animated.View>
+    </>
   );
 }
 
@@ -184,7 +208,9 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     searchText: { color: colors.muted, fontSize: 15 },
     addressRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, gap: spacing.sm },
     address: { flex: 1, fontSize: 15, fontWeight: '800', color: colors.ink },
-    count: { ...type.mono, fontWeight: '700' },
+    count: { fontSize: 13, fontWeight: '600', color: colors.muted },
+    floatWrap: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+    floatButtons: { position: 'absolute', top: 0, right: spacing.lg, gap: spacing.md },
     list: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.line },
     listContent: { paddingBottom: 120 },
   });

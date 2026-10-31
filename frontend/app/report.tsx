@@ -13,7 +13,7 @@ import { CategoryChip } from '@/components/CategoryChip';
 import { DuplicateSheet } from '@/components/DuplicateSheet';
 import { Icon } from '@/components/Icon';
 import { CATEGORIES } from '@/constants/categories';
-import { DARK_MAP_STYLE } from '@/constants/mapStyle';
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE } from '@/constants/mapStyle';
 import { radius, shadow, spacing, white } from '@/constants/theme';
 import { useThemed, type ThemeValues } from '@/theme/ThemeProvider';
 import type { Category, Candidate } from '@/types';
@@ -166,7 +166,7 @@ export default function ReportScreen() {
         <View style={s.mapWrap}>
           <MapView
             style={StyleSheet.absoluteFill}
-            customMapStyle={isDark ? DARK_MAP_STYLE : undefined}
+            customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
             region={{ ...coords, latitudeDelta: 0.004, longitudeDelta: 0.004 }}
             toolbarEnabled={false}
             showsCompass={false}

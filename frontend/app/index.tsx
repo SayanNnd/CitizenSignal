@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SignalMark } from '@/components/SignalMark';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { Circle, Marker } from 'react-native-maps';
-import { useRouter } from 'expo-router';
+import { useIsFocused, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIssues } from '@/hooks/useIssues';
 import { useAuth } from '@/auth/AuthProvider';
@@ -12,7 +13,7 @@ import { RoundButton } from '@/components/RoundButton';
 import { CompassButton } from '@/components/CompassButton';
 import { Icon } from '@/components/Icon';
 import { CATEGORY_COLORS } from '@/constants/categories';
-import { DARK_MAP_STYLE } from '@/constants/mapStyle';
+import { DARK_MAP_STYLE, LIGHT_MAP_STYLE } from '@/constants/mapStyle';
 import { radius, shadow, spacing, white } from '@/constants/theme';
 import { useThemed, type ThemeValues } from '@/theme/ThemeProvider';
 
@@ -26,17 +27,21 @@ export default function HomeScreen() {
   const { colors, isDark, s } = useThemed(makeStyles);
   const { user, signOut } = useAuth();
   const loc = useLocationContext();
-  const { center, radius: radiusM, focusedIssueId, setFocusedIssueId } = loc;
+  const { center, ready, radius: radiusM, focusedIssueId, setFocusedIssueId } = loc;
 
   const mapRef = useRef<MapView>(null);
   const [snap, setSnap] = useState<Snap>('half');
-  const [sheetH, setSheetH] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [heading, setHeading] = useState(0);
   const [trackMarkers, setTrackMarkers] = useState(true);
 
   // useIssues asks the API for open issues only; fixed ones are not shown on the map or in the feed.
-  const { data, isLoading, isError, refetch } = useIssues(center.latitude, center.longitude, radiusM);
+  // Nothing is requested until the location is known, so we never load the fallback city first.
+  const { data, isPending, isError, refetch } = useIssues(
+    ready ? center.latitude : null,
+    ready ? center.longitude : null,
+    radiusM,
+  );
   const issues = useMemo(() => data ?? [], [data]);
 
   // Custom markers only need to re-render briefly when their content changes.
@@ -46,31 +51,47 @@ export default function HomeScreen() {
     return () => clearTimeout(t);
   }, [issues.length, focusedIssueId, isDark]);
 
-  // Fly to a newly selected locality and show its issues.
-  useEffect(() => {
+  // Where the camera should be: the focused issue (picked in search or tapped on the map),
+  // otherwise the selected area. Both are shifted down so the point sits above the sheet.
+  const focusedIssue = focusedIssueId ? issues.find((i) => i.id === focusedIssueId) : undefined;
+  const target = useMemo(() => {
+    if (focusedIssue) {
+      return { latitude: focusedIssue.latitude - 0.0012, longitude: focusedIssue.longitude, latitudeDelta: 0.006, longitudeDelta: 0.006 };
+    }
     const d = deltaFor(radiusM);
-    mapRef.current?.animateToRegion(
-      // shift the camera so the centre sits above the sheet, not under it
-      { latitude: center.latitude - d * 0.18, longitude: center.longitude, latitudeDelta: d, longitudeDelta: d },
-      600,
-    );
-    if (!loc.isCurrent) setSnap('half');
-  }, [center.latitude, center.longitude, radiusM, loc.isCurrent]);
+    return { latitude: center.latitude - d * 0.18, longitude: center.longitude, latitudeDelta: d, longitudeDelta: d };
+  }, [focusedIssue, center.latitude, center.longitude, radiusM]);
 
-  // An issue picked from search (or tapped on the map) gets zoomed to and listed.
+  // Picking a place or issue happens on the search screen, while this screen (and its map) is hidden;
+  // a camera move sent to a hidden map is dropped. So move the camera only while this screen is
+  // focused, and catch up when it comes back into view.
+  const isFocused = useIsFocused();
+  const flownTo = useRef('');
+  const [recenterNonce, setRecenterNonce] = useState(0);
   useEffect(() => {
-    if (!focusedIssueId) return;
-    const issue = issues.find((i) => i.id === focusedIssueId);
-    if (!issue) return;
-    mapRef.current?.animateToRegion(
-      { latitude: issue.latitude - 0.0012, longitude: issue.longitude, latitudeDelta: 0.006, longitudeDelta: 0.006 },
-      500,
-    );
-    setSnap((cur) => (cur === 'collapsed' ? 'half' : cur));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedIssueId, data]);
+    if (!isFocused || !ready || !mapRef.current) return;
+    const key = `${target.latitude},${target.longitude},${target.latitudeDelta},${recenterNonce}`;
+    if (key === flownTo.current) return;
+    const first = flownTo.current === '';
+    flownTo.current = key;
+    // wait for the back transition to finish before animating
+    const t = setTimeout(() => mapRef.current?.animateToRegion(target, 600), first ? 0 : 350);
+    return () => clearTimeout(t);
+  }, [isFocused, ready, target, recenterNonce]);
 
-  const onVisibleHeight = useCallback((h: number) => setSheetH(h), []);
+  // A searched locality or a focused issue should be visible in the list, not hidden under a collapsed sheet.
+  useEffect(() => {
+    if (!loc.isCurrent) setSnap('half');
+  }, [center.latitude, center.longitude, loc.isCurrent]);
+  useEffect(() => {
+    if (focusedIssue) setSnap((cur) => (cur === 'collapsed' ? 'half' : cur));
+  }, [focusedIssue]);
+
+  function goToMyLocation() {
+    loc.useMyLocation();
+    // the area may not change (already "here") after panning away, so force the camera back anyway
+    setRecenterNonce((n) => n + 1);
+  }
 
   // Read the camera heading while the map moves (not only when it stops) so the compass can follow.
   // One request at a time; the compass itself animates between readings.
@@ -106,16 +127,21 @@ export default function HomeScreen() {
       : { key: 'login', icon: 'user', label: 'Log in', onPress: () => router.push('/login') },
   ];
 
-  const floatingBottom = sheetH + spacing.md;
-
   return (
     <View style={s.root}>
+      {!ready ? (
+        <View style={s.locating}>
+          <SignalMark size={64} animated />
+          <Text style={s.locatingText}>Finding your location…</Text>
+        </View>
+      ) : (
       <MapView
         ref={mapRef}
         style={StyleSheet.absoluteFill}
-        customMapStyle={isDark ? DARK_MAP_STYLE : undefined}
+        customMapStyle={isDark ? DARK_MAP_STYLE : LIGHT_MAP_STYLE}
         initialRegion={{
-          latitude: center.latitude, longitude: center.longitude,
+          // same offset as the fly-to effect, so the first frame already matches
+          latitude: center.latitude - deltaFor(radiusM) * 0.18, longitude: center.longitude,
           latitudeDelta: deltaFor(radiusM), longitudeDelta: deltaFor(radiusM),
         }}
         showsUserLocation={!!loc.userCoords}
@@ -156,6 +182,7 @@ export default function HomeScreen() {
           );
         })}
       </MapView>
+      )}
 
       <RoundButton
         icon="menu"
@@ -167,7 +194,7 @@ export default function HomeScreen() {
       {loc.permissionDenied && (
         <TouchableOpacity
           style={[s.notice, { top: insets.top + spacing.md }]}
-          onPress={() => loc.useMyLocation()}
+          onPress={goToMyLocation}
           activeOpacity={0.85}
         >
           <Icon name="locate" size={18} color={colors.surface} />
@@ -175,23 +202,11 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {snap !== 'full' && (
-        <View style={[s.sideButtons, { bottom: floatingBottom }]}>
-          <CompassButton heading={heading} onPress={faceNorth} />
-          <RoundButton
-            icon="locate"
-            label="Go to my location"
-            onPress={() => loc.useMyLocation()}
-            active={loc.isCurrent && !!loc.userCoords}
-          />
-        </View>
-      )}
-
       <IssueSheet
         snap={snap}
         onSnapChange={setSnap}
         issues={issues}
-        isLoading={isLoading}
+        isLoading={!ready || isPending}
         isError={isError}
         onRetry={refetch}
         address={center.label}
@@ -199,7 +214,17 @@ export default function HomeScreen() {
         focusedId={focusedIssueId}
         onOpenSearch={() => router.push('/search')}
         onOpenIssue={(id) => router.push(`/issue/${id}`)}
-        onVisibleHeight={onVisibleHeight}
+        floating={
+          <>
+            <CompassButton heading={heading} onPress={faceNorth} />
+            <RoundButton
+              icon="locate"
+              label="Go to my location"
+              onPress={goToMyLocation}
+              active={loc.isCurrent && !!loc.userCoords}
+            />
+          </>
+        }
       />
 
       {snap !== 'collapsed' && (
@@ -223,7 +248,8 @@ export default function HomeScreen() {
 const makeStyles = ({ colors }: ThemeValues) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
-    sideButtons: { position: 'absolute', right: spacing.lg, gap: spacing.md },
+    locating: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'flex-start', paddingTop: '28%', gap: spacing.md },
+    locatingText: { fontSize: 14, fontWeight: '600', color: colors.muted },
     notice: {
       position: 'absolute', left: 80, right: spacing.lg, height: 48, borderRadius: radius.md,
       backgroundColor: colors.ink, flexDirection: 'row', gap: spacing.sm, alignItems: 'center',

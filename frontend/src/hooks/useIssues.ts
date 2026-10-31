@@ -1,14 +1,19 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { listIssues, getIssue, reportIssue, addUpvote, removeUpvote, listMyIssues, listComments, addComment } from '../api/issues';
 
 const ISSUES_KEY = 'issues';
 
-/** Nearby issues for the map, feed and search. Only open ones: fixed issues aren't shown to users. */
+/**
+ * Nearby issues for the map, feed and search. Only open ones: fixed issues aren't shown to users.
+ * Pass null coordinates until the location is known. When the area changes, the previous list
+ * stays on screen until the new one arrives instead of flashing a spinner.
+ */
 export function useIssues(lat: number | null, lng: number | null, radius_m?: number) {
   return useQuery({
     queryKey: [ISSUES_KEY, lat, lng, radius_m, 'open'],
     queryFn: () => listIssues({ lat: lat!, lng: lng!, radius_m, status: 'open' }),
     enabled: lat !== null && lng !== null,
+    placeholderData: keepPreviousData,
     select: (data) => data.issues,
   });
 }

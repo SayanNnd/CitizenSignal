@@ -1,6 +1,7 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getDistance } from 'geolib';
 import { DEFAULT_RADIUS_M, MAX_RADIUS_M } from '../constants/limits';
 
 export interface Coords {
@@ -16,12 +17,19 @@ const FALLBACK: Place = { latitude: 28.6139, longitude: 77.209, label: 'New Delh
 const RADIUS_KEY = 'cs.radius_m';
 const RECENT_KEY = 'cs.recent_places';
 const MAX_RECENT = 5;
+/** Never keep the app waiting on a slow GPS for longer than this. */
+const READY_TIMEOUT_MS = 6000;
+/** A fresh GPS fix only moves the area if the phone is this far from its last known position. */
+const MOVE_THRESHOLD_M = 300;
+const CURRENT_LABEL = 'Current location';
 
 export const RADIUS_OPTIONS = [500, 1000, 2000, 5000];
 
 interface LocationContextValue {
   /** Area whose issues are shown (user's position or a searched locality). */
   center: Place;
+  /** False until the first location is known (or we gave up waiting); don't load issues before. */
+  ready: boolean;
   /** Real GPS position, if permission was granted. */
   userCoords: Coords | null;
   permissionDenied: boolean;
@@ -56,12 +64,24 @@ export async function labelFor(coords: Coords): Promise<string> {
 
 export function LocationProvider({ children }: { children: React.ReactNode }) {
   const [center, setCenter] = useState<Place>(FALLBACK);
+  const [ready, setReady] = useState(false);
   const [userCoords, setUserCoords] = useState<Coords | null>(null);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [isCurrent, setIsCurrent] = useState(true);
   const [radius, setRadiusState] = useState(DEFAULT_RADIUS_M);
   const [recent, setRecent] = useState<Place[]>([]);
   const [focusedIssueId, setFocusedIssueId] = useState<string | null>(null);
+
+  const isCurrentRef = useRef(true);
+  isCurrentRef.current = isCurrent;
+
+  /** Show the coordinates straight away; fill in the street name when the geocoder answers. */
+  const moveTo = useCallback((coords: Coords) => {
+    setCenter({ ...coords, label: CURRENT_LABEL });
+    labelFor(coords).then((label) =>
+      setCenter((c) => (c.latitude === coords.latitude && c.longitude === coords.longitude ? { ...c, label } : c)),
+    );
+  }, []);
 
   const locate = useCallback(async (): Promise<Coords | null> => {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -81,6 +101,15 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    let finished = false;
+    const finish = () => {
+      if (!finished) {
+        finished = true;
+        setReady(true);
+      }
+    };
+    const timer = setTimeout(finish, READY_TIMEOUT_MS);
+
     (async () => {
       try {
         const [r, rec] = await Promise.all([AsyncStorage.getItem(RADIUS_KEY), AsyncStorage.getItem(RECENT_KEY)]);
@@ -89,10 +118,43 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
       } catch {
         // storage is only a convenience
       }
-      const coords = await locate();
-      if (coords) setCenter({ ...coords, label: await labelFor(coords) });
+
+      const { status } = await Location.requestForegroundPermissionsAsync().catch(() => ({ status: 'denied' as const }));
+      if (status !== 'granted') {
+        setPermissionDenied(true);
+        finish();
+        return;
+      }
+
+      // 1. Last known fix is instant: start loading issues right away from it.
+      let start: Coords | null = null;
+      try {
+        const last = await Location.getLastKnownPositionAsync();
+        if (last) start = { latitude: last.coords.latitude, longitude: last.coords.longitude };
+      } catch {
+        // no cached fix; wait for a fresh one
+      }
+      if (start) {
+        setUserCoords(start);
+        moveTo(start);
+        finish();
+      }
+
+      // 2. Fresh fix: only move the area if the phone is actually somewhere else, to avoid a reload.
+      try {
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const fresh = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setUserCoords(fresh);
+        const moved = !start || getDistance(start, fresh) > MOVE_THRESHOLD_M;
+        if (moved && isCurrentRef.current) moveTo(fresh);
+      } catch {
+        // keep whatever we had
+      }
+      finish();
     })();
-  }, [locate]);
+
+    return () => clearTimeout(timer);
+  }, [moveTo]);
 
   const setRadius = useCallback((m: number) => {
     const clamped = Math.min(m, MAX_RADIUS_M);
@@ -116,15 +178,15 @@ export function LocationProvider({ children }: { children: React.ReactNode }) {
     if (!coords) return;
     setIsCurrent(true);
     setFocusedIssueId(null);
-    setCenter({ ...coords, label: await labelFor(coords) });
-  }, [userCoords, locate]);
+    moveTo(coords);
+  }, [userCoords, locate, moveTo]);
 
   const value = useMemo(
     () => ({
-      center, userCoords, permissionDenied, isCurrent, radius, setRadius, recent,
+      center, ready, userCoords, permissionDenied, isCurrent, radius, setRadius, recent,
       selectPlace, useMyLocation, focusedIssueId, setFocusedIssueId,
     }),
-    [center, userCoords, permissionDenied, isCurrent, radius, setRadius, recent, selectPlace, useMyLocation, focusedIssueId],
+    [center, ready, userCoords, permissionDenied, isCurrent, radius, setRadius, recent, selectPlace, useMyLocation, focusedIssueId],
   );
 
   return <LocationContext.Provider value={value}>{children}</LocationContext.Provider>;
