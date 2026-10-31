@@ -143,14 +143,19 @@ Statuses: `open`, `resolved`.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | none | Liveness check |
-| GET | `/issues?lat&lng&radius_m=2000` | optional | Nearby issues, sorted by priority. Includes `has_upvoted` if token present. |
+| GET | `/issues?lat&lng&radius_m=2000` | optional | Nearby issues, sorted by priority. Includes `has_upvoted` if token present. Optional filters below. |
+| GET | `/issues/mine` | **required** | `{ issues: MyIssue[] }` — issues the caller reported **or** contributed evidence to, newest own activity first (max 100). |
 | GET | `/issues/:id` | optional | Issue + evidence list |
 | POST | `/issues` | optional | Report (multipart). Runs the matching pipeline. |
 | POST | `/issues/:id/upvote` | **required** | Add upvote (one per user per issue) |
 | DELETE | `/issues/:id/upvote` | **required** | Remove upvote |
 
+**`GET /issues` query:** `lat`, `lng` (required); `radius_m` (default 2000, max 20000); optional `q` (≤ 100 chars; every word must appear in title or description, case-insensitive, punctuation ignored), `category`, `status`. Invalid values → 400 `VALIDATION_ERROR`.
+
 **Issue object** (list + detail):
 `id, category, title, description, latitude, longitude, status, image_url, upvotes, evidence_count, recurrence_count, priority, days_open, created_at, resolved_at, reopened_at, has_upvoted`
+
+**MyIssue object** (`/issues/mine`): Issue + `my_role`: `"reporter"` (caller created it) or `"contributor"` (caller's report was merged into it, including reopening it). Logged-out reports have no owner, so they never appear here.
 
 **`POST /issues` — multipart fields:** `category`, `description` (short, 10–280 chars), `latitude`, `longitude`, `photo` (file), plus optional `confirm_issue_id` (user said "yes, same issue") or `force_new=true` (user said "no, different").
 

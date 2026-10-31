@@ -24,3 +24,5 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Lets the frontend work in parallel with the backend and keeps the demo path short. Rejected: iOS support (HEIC and extra testing), social login or magic links (deep-link pain in Expo Go), requiring login before reporting (adds friction to the main flow).
 - **Why it's good:** Anyone can try the app instantly; the upvote login gate still gives one vote per account; smaller uploads are faster on venue Wi-Fi.
 - **Fallbacks / limits:** No iOS support; mock data must be kept in sync with the real contract by hand; confirming a possible duplicate re-uploads the photo.
+
+- **[ALL] 13:45 (from Track A):** Contract §4 updated — added `GET /api/issues/mine` (requireAuth, returns `MyIssue` = Issue + `my_role`), and optional `q`, `category`, `status` filters on `GET /api/issues`; `radius_m` is capped at 20000.
