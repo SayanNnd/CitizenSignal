@@ -6,6 +6,9 @@ const MAX_LIST_RADIUS_M = 20_000;
 
 const MAX_SEARCH_LENGTH = 100;
 
+/** Matches the `char_length(body)` check on the `comments` table. */
+const MAX_COMMENT_LENGTH = 500;
+
 /**
  * Treats a blank field (`?q=`, an empty multipart field) as missing. Without this,
  * `z.coerce.number()` turns "" into 0 and a report with no GPS lands at 0,0.
@@ -85,4 +88,13 @@ export type ListQuery = z.infer<typeof ListQuerySchema>;
 
 export const IssueIdSchema = z.object({
   id: z.uuid('Invalid issue id'),
+});
+
+/** JSON body of `POST /issues/:id/comments`. The author comes from the token, never the body. */
+export const CommentBodySchema = z.object({
+  body: z
+    .string({ error: (issue) => (issue.input === undefined ? 'Comment is required' : 'Comment must be text') })
+    .trim()
+    .min(1, 'Comment cannot be empty')
+    .max(MAX_COMMENT_LENGTH, `Comment must be at most ${MAX_COMMENT_LENGTH} characters`),
 });

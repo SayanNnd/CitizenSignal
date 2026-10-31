@@ -48,11 +48,14 @@ function section(title: string) {
 
 type Json = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-async function call(method: string, path: string, token?: string, body?: FormData) {
+async function call(method: string, path: string, token?: string, body?: FormData | Json) {
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const isJson = body !== undefined && !(body instanceof FormData);
+  if (isJson) headers['Content-Type'] = 'application/json';
   const res = await fetch(`${API}${path}`, {
     method,
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-    body,
+    headers,
+    body: isJson ? JSON.stringify(body) : body,
   });
   return { status: res.status, body: (await res.json()) as Json };
 }
@@ -259,6 +262,22 @@ async function run(user: { id: string; token: string }) {
   check('unvote → 0', down.body.issue?.upvotes === 0 && down.body.issue?.has_upvoted === false, down.body);
   const down2 = await call('DELETE', `/issues/${p1.id}/upvote`, token);
   check('unvote again → 200, still 0', down2.status === 200 && down2.body.issue?.upvotes === 0, down2);
+
+  section('Comments');
+  const noAuthComment = await call('POST', `/issues/${p1.id}/comments`, undefined, { body: 'Still there this morning' });
+  check('401 without token', noAuthComment.status === 401 && noAuthComment.body.error?.code === 'UNAUTHORIZED', noAuthComment);
+  const blank = await call('POST', `/issues/${p1.id}/comments`, token, { body: '   ' });
+  check('blank comment → 400 VALIDATION_ERROR on body', blank.status === 400 && blank.body.error?.details?.[0]?.field === 'body', blank);
+  const posted = await call('POST', `/issues/${p1.id}/comments`, token, { body: '  Still there this morning  ', user_id: 'spoofed' });
+  const comment = posted.body.comment;
+  check('201, trimmed, is_mine, author from token', posted.status === 201 && comment?.body === 'Still there this morning' && comment?.is_mine === true && typeof comment?.author === 'string', posted);
+  check('no user_id leaked', !('user_id' in (comment ?? {})));
+  const anonComments = await call('GET', `/issues/${p1.id}/comments`);
+  check('public list, is_mine=false without token', anonComments.body.comments?.length === 1 && anonComments.body.comments[0].is_mine === false, anonComments.body);
+  const withCount = (await call('GET', `/issues/${p1.id}`)).body.issue;
+  check('issue comment_count = 1', withCount.comment_count === 1, withCount.comment_count);
+  const missingIssue = await call('GET', '/issues/6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b/comments');
+  check('comments of unknown issue → 404', missingIssue.status === 404, missingIssue.status);
 
   section('Anonymous report + /issues/mine');
   const anon = await report({ category: 'garbage', description: 'Garbage piled up beside the school gate for a week', pos: at(-150) });

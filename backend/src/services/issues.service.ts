@@ -6,8 +6,11 @@ import { computePriority } from './priority.service.js';
 import { deleteImage, processAndUploadImage, UploadedImage } from './image.service.js';
 import { findMatches, normalize, ScoredMatch } from './matching.service.js';
 import type {
+  AuthUser,
   Candidate,
   Category,
+  Comment,
+  CommentRow,
   Evidence,
   EvidenceRow,
   Issue,
@@ -26,6 +29,9 @@ const MAX_SEARCH_WORDS = 5;
 /** Cap on `GET /issues/mine` results. */
 const MAX_MY_ISSUES = 100;
 
+/** Cap on `GET /issues/:id/comments` results (oldest first). */
+const MAX_COMMENTS = 200;
+
 // ── mapping ──────────────────────────────────────────────────────────────────
 
 /** Row → API issue. Whitelists contract fields (drops `created_by`) and adds computed ones. */
@@ -43,6 +49,7 @@ function toIssue(row: IssueRow, has_upvoted = false): Issue {
     upvotes: row.upvotes,
     evidence_count: row.evidence_count,
     recurrence_count: row.recurrence_count,
+    comment_count: row.comment_count,
     priority,
     days_open,
     created_at: row.created_at,
@@ -61,6 +68,17 @@ function toEvidence(row: EvidenceRow): Evidence {
     latitude: row.latitude,
     longitude: row.longitude,
     created_at: row.created_at,
+  };
+}
+
+function toComment(row: CommentRow, userId?: string): Comment {
+  return {
+    id: row.id,
+    issue_id: row.issue_id,
+    author: row.author,
+    body: row.body,
+    created_at: row.created_at,
+    is_mine: row.user_id === userId,
   };
 }
 
@@ -118,12 +136,13 @@ async function getUpvotedIds(userId: string, issueIds: string[]): Promise<Set<st
 const COUNTERS = {
   upvotes: { table: 'upvotes', base: 0 },
   evidence_count: { table: 'evidence', base: 1 }, // 1 = the issue's own first report
+  comment_count: { table: 'comments', base: 0 },
 } as const;
 
 /** Safety cap for `syncCounter`'s re-check loop; it normally finishes on the first pass. */
 const MAX_COUNTER_SYNC_ATTEMPTS = 5;
 
-async function countRows(table: 'upvotes' | 'evidence', issueId: string): Promise<number> {
+async function countRows(table: (typeof COUNTERS)[keyof typeof COUNTERS]['table'], issueId: string): Promise<number> {
   const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('issue_id', issueId);
   if (error) throw new Error(`Counting ${table} failed: ${error.message}`);
   return count ?? 0;
@@ -420,4 +439,35 @@ export async function removeUpvote(issueId: string, userId: string): Promise<Iss
   if (error) throw new Error(`Removing upvote failed: ${error.message}`);
 
   return toIssue(await syncCounter(issueId, 'upvotes'), false);
+}
+
+// ── comments ─────────────────────────────────────────────────────────────────
+
+/** The discussion under an issue, oldest first (the app appends new ones at the bottom). */
+export async function getComments(issueId: string, userId?: string): Promise<Comment[]> {
+  await requireIssueRow(issueId);
+
+  const { data, error } = await supabase
+    .from('comments')
+    .select('*')
+    .eq('issue_id', issueId)
+    .order('created_at', { ascending: true })
+    .limit(MAX_COMMENTS);
+  if (error) throw new Error(`Comment lookup failed: ${error.message}`);
+  return ((data ?? []) as CommentRow[]).map((row) => toComment(row, userId));
+}
+
+/** Adds a comment as the verified user and refreshes the issue's cached `comment_count`. */
+export async function addComment(issueId: string, user: AuthUser, body: string): Promise<Comment> {
+  await requireIssueRow(issueId);
+
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({ issue_id: issueId, user_id: user.id, author: user.name, body })
+    .select()
+    .single();
+  if (error) throw new Error(`Comment insert failed: ${error.message}`);
+
+  await syncCounter(issueId, 'comment_count');
+  return toComment(data as CommentRow, user.id);
 }

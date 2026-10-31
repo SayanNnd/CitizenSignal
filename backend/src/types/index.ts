@@ -18,6 +18,8 @@ export type Status = (typeof STATUSES)[number];
 export interface AuthUser {
   id: string;
   email?: string;
+  /** Public display name for comments, e.g. "Meera K." (from the Google profile). */
+  name: string;
 }
 
 /** A row of the `issues` table as Postgres returns it. */
@@ -33,6 +35,7 @@ export interface IssueRow {
   upvotes: number;
   evidence_count: number;
   recurrence_count: number;
+  comment_count: number;
   created_by: string | null;
   created_at: string;
   resolved_at: string | null;
@@ -51,6 +54,16 @@ export interface EvidenceRow {
   created_at: string;
 }
 
+/** A row of the `comments` table as Postgres returns it. */
+export interface CommentRow {
+  id: string;
+  issue_id: string;
+  user_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+}
+
 // ── API shapes (roadmap.md §4) ───────────────────────────────────────────────
 
 export interface Issue {
@@ -65,6 +78,7 @@ export interface Issue {
   upvotes: number;
   evidence_count: number;
   recurrence_count: number;
+  comment_count: number;
   priority: number;
   days_open: number;
   created_at: string;
@@ -81,6 +95,16 @@ export interface Evidence {
   latitude: number;
   longitude: number;
   created_at: string;
+}
+
+/** An item of `GET /issues/:id/comments`. Drops `user_id`; `is_mine` says whether the caller wrote it. */
+export interface Comment {
+  id: string;
+  issue_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+  is_mine: boolean;
 }
 
 /**

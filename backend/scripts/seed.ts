@@ -170,7 +170,7 @@ async function clearBucket() {
 
 async function clearTables() {
   // PostgREST refuses unfiltered deletes, so filter on something that's always true.
-  for (const [table, column] of [['upvotes', 'issue_id'], ['evidence', 'id'], ['issues', 'id']] as const) {
+  for (const [table, column] of [['upvotes', 'issue_id'], ['comments', 'id'], ['evidence', 'id'], ['issues', 'id']] as const) {
     const { error } = await supabase.from(table).delete().neq(column, NIL_UUID);
     if (error) throw new Error(`Clearing ${table} failed: ${error.message}`);
   }
