@@ -8,7 +8,7 @@ export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK !== 'false';
 export const HAS_SUPABASE = !!process.env.EXPO_PUBLIC_SUPABASE_URL && !!process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 /**
- * Login is real whenever Supabase is configured, even with mock data, so Google sign-in
- * behaves for real. Only with no Supabase config does it fall back to an instant fake user.
+ * Login goes through the backend (`POST /api/auth/login`), so with mock data (no backend) or no
+ * Supabase config, the login form signs in a fake user with whatever email was typed.
  */
-export const USE_MOCK_AUTH = !HAS_SUPABASE;
+export const USE_MOCK_AUTH = USE_MOCK || !HAS_SUPABASE;

@@ -114,9 +114,20 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why it's good:** Every text colour on the background clears 4.5:1 (ink 14.3, muted 5.2, accent 5.3, success 5.2, severity ≥ 4.5), and light and dark mode now both have a deliberate, matching map.
 - **Fallbacks / limits:** On the single highlighted Pastel Pink row, caption text drops to about 3.9:1. Category colours (pins, icons) are unchanged. Not yet checked on a phone screen.
 
+<<<<<<< HEAD
 ### README rewrite — 18:10
 - **Task:** Replace the Expo starter README with a real one for the project, no emojis, in a human tone.
 - **Decision:** `README.md` covers what the app does, how duplicate detection and priority work (numbers taken from `backend/src/config/matching.ts` and `priority.service.ts`), the stack, layout, setup for Supabase, server and app, mock mode, the API in brief, how to check changes, and an honest limitations list.
 - **Why:** Every command, env var and endpoint was checked against the repo and `roadmap.md` §4 rather than written from memory. Rejected: duplicating the full contract (it would drift from `roadmap.md`, so the README links to it).
 - **Why it's good:** A judge or new teammate can understand the idea in the first paragraph and run the project from the setup section alone.
 - **Fallbacks / limits:** `LICENSE` still contains the Expo template's MIT text (copyright 650 Industries); the README only points to it. Setup steps were not re-run from scratch on a clean machine.
+=======
+- **[ALL] 2026-10-31 (from Track A):** Contract §4 — added `POST /api/auth/login` `{ email, password }` → `{ access_token, refresh_token, created }` (200 signed in / 201 registered / 401 wrong password). Google sign-in removed.
+
+### Email + password login replaces Google — 2026-10-31
+- **Task:** Swap Google sign-in for a simple email + password form (same flow for new and returning users, no OTP).
+- **Decision:** `app/login.tsx` is now an email + password form with inline errors and a Show/Hide toggle. `AuthProvider.signIn` calls `login()` (`src/api/auth.ts`) and stores the returned tokens with `supabase.auth.setSession`, so token refresh and `apiFetch` work as before. Removed `src/auth/google.ts`, the `expo-auth-session` / `expo-web-browser` packages and the plugin in `app.json`. `USE_MOCK_AUTH` is now `USE_MOCK || !HAS_SUPABASE`, because login needs the backend. `AuthProvider` also clears "Your Issues" and refetches everything when the logged-in user changes.
+- **Why:** The Google flow needed four dashboard settings plus a deep link that Expo Router also handles, and it crashed in Expo Go (`ExpoCrypto` from `expo-auth-session`). Rejected keeping Google as a second option, since it would keep all of that for little gain.
+- **Why it's good:** No browser hop or redirect URLs, fewer native packages, and the pending-upvote return now just goes back one screen. Fixes the stale `has_upvoted` / other-user "Your Issues" bug found in the earlier review.
+- **Fallbacks / limits:** No "forgot password" (out of scope). With mock data the form signs in a fake user without checking the password. Not yet run on the phone with the Email provider on.
+>>>>>>> d4c6d359741ddbdfbeb03c3f0fcf28effcf433c7

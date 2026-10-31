@@ -3,6 +3,7 @@ import cors from 'cors';
 import { env } from './config/env.js';
 import { healthRouter } from './routes/health.routes.js';
 import { issuesRouter } from './routes/issues.routes.js';
+import { authRouter } from './routes/auth.routes.js';
 import { errorMiddleware, notFoundMiddleware } from './middleware/error.js';
 
 export const app = express();
@@ -15,6 +16,7 @@ app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/issues', issuesRouter);
+app.use('/api/auth', authRouter);
 
 // Express 5 forwards async errors automatically — no try/catch wrappers needed.
 app.use(notFoundMiddleware);

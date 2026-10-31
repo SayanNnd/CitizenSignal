@@ -12,9 +12,9 @@ Time box: ~5 hours. Assumed start 11:45 → end 16:45. **Feature freeze 15:30.**
 | Topic | Decision |
 |---|---|
 | Platform | **Android only**, tested in Expo Go. No iOS work (no HEIC handling, no iOS-specific config). |
-| Auth | **Supabase Auth, Google sign-in only** (changed from email + password). Email provider is off. Dashboard: Auth → Providers → Google enabled; Auth → URL Configuration → **Site URL `citizensignal://`** (not localhost — Supabase falls back to it when `redirectTo` isn't allowed) and **Redirect URLs `exp://**`** (Expo Go). App flow: `signInWithOAuth({ provider: 'google', options: { redirectTo: makeRedirectUri(), skipBrowserRedirect: true } })` → `WebBrowser.openAuthSessionAsync(url, redirectTo)` → `setSession` from the tokens in the returned URL. No magic links. |
+| Auth | **Supabase Auth, email + password** (changed back from Google sign-in). One form: `POST /api/auth/login` signs in, or creates the account first if the email is new. The server creates accounts already confirmed (`auth.admin.createUser({ email_confirm: true })`), so no confirmation email or OTP is ever sent. Dashboard: Authentication → Sign In / Providers → **Email enabled**. No Google, no magic links. |
 | What needs login | **Upvoting requires login.** Browsing the map/list is public. Reporting uses *optional* auth (user id attached if logged in). To make reporting login-only later, swap `optionalAuth` → `requireAuth` on one route. |
-| Token flow | App signs in with Google via `@supabase/supabase-js` → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
+| Token flow | App gets `{ access_token, refresh_token }` from `POST /api/auth/login`, stores them with `supabase.auth.setSession` (so `@supabase/supabase-js` refreshes them) → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
 | Admin | None. Mark issues resolved in **Supabase Studio** (set `status='resolved'`, `resolved_at=now()`). |
 | Mandatory packages | **Zod, Multer, Sharp, Geolib, string-similarity** — all five used on the server, versions below. |
 
@@ -90,7 +90,7 @@ citizensignal/
     │   │   ├── list.tsx          # Compact nearby list
     │   │   └── report.tsx        # Report form
     │   ├── issue/[id].tsx        # Detail + upvote + evidence
-    │   └── login.tsx             # "Sign in with Google" (opened when upvoting logged-out)
+    │   └── login.tsx             # email + password, signs in or registers (opened when upvoting logged-out)
     └── src/
         ├── api/
         │   ├── client.ts         # fetch wrapper, adds Bearer token
@@ -112,7 +112,7 @@ citizensignal/
 
 ```
 npx expo install expo-router expo-location expo-image-picker expo-image-manipulator expo-constants \
-  expo-auth-session expo-web-browser react-native-maps @react-native-async-storage/async-storage react-native-url-polyfill
+  react-native-maps @react-native-async-storage/async-storage react-native-url-polyfill
 npm i @tanstack/react-query @supabase/supabase-js zod geolib
 ```
 
@@ -144,6 +144,7 @@ Statuses: `open`, `resolved`.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | none | Liveness check |
+| POST | `/auth/login` | none | JSON `{ email, password }` (password 6–72 chars) → `{ access_token, refresh_token, created }`: **200** signed in, **201** account created and signed in. Wrong password for an existing email → 401. |
 | GET | `/issues?lat&lng&radius_m=2000` | optional | Nearby issues, sorted by priority. Includes `has_upvoted` if token present. Optional filters below. |
 | GET | `/issues/mine` | **required** | `{ issues: MyIssue[] }` — issues the caller reported **or** contributed evidence to, newest own activity first (max 100). |
 | GET | `/issues/:id` | optional | Issue + evidence list |
@@ -158,7 +159,7 @@ Statuses: `open`, `resolved`.
 **Issue object** (list + detail):
 `id, category, title, description, latitude, longitude, status, image_url, upvotes, evidence_count, recurrence_count, comment_count, priority, days_open, created_at, resolved_at, reopened_at, has_upvoted`
 
-**Comment object:** `id, issue_id, author, body, created_at, is_mine`. `author` is a public display name built from the Google profile ("Meera K."; "Citizen" if the profile has no name). It is never derived from the email.
+**Comment object:** `id, issue_id, author, body, created_at, is_mine`. `author` is a public display name: "Meera K." from a profile name if there is one, otherwise the part of the email before the @ (never the full address), else "Citizen".
 
 **MyIssue object** (`/issues/mine`): Issue + `my_role`: `"reporter"` (caller created it) or `"contributor"` (caller's report was merged into it, including reopening it). Logged-out reports have no owner, so they never appear here.
 
@@ -249,8 +250,8 @@ Two tracks + one shared contract. If there's a third peer, they take the **Float
 
 | Time | Track A — Backend | Track B — Frontend | Floating / All |
 |---|---|---|---|
-| 11:45–12:15 | Repo + Express skeleton, `/health`, env validation | Expo app scaffold, Expo Router tabs, env, supabase client | **All:** Supabase project, run `schema.sql`, create bucket, enable Google provider + set Site URL / Redirect URLs (§1), pick LAN/tunnel URL, agree on §4 |
-| 12:15–13:30 | `GET /issues`, `POST /issues` happy path: Multer → Zod → Sharp → storage → insert; `requireAuth/optionalAuth` | Google sign-in screen + AuthProvider; Map + List screens on **mock data** (`EXPO_PUBLIC_USE_MOCK=true`) | Seed script skeleton |
+| 11:45–12:15 | Repo + Express skeleton, `/health`, env validation | Expo app scaffold, Expo Router tabs, env, supabase client | **All:** Supabase project, run `schema.sql`, create bucket, enable the Email provider (§1), pick LAN/tunnel URL, agree on §4 |
+| 12:15–13:30 | `GET /issues`, `POST /issues` happy path: Multer → Zod → Sharp → storage → insert; `requireAuth/optionalAuth` | Login screen + AuthProvider; Map + List screens on **mock data** (`EXPO_PUBLIC_USE_MOCK=true`) | Seed script skeleton |
 | 13:30–14:15 | `matching.service` (3 outcomes + reopen), `priority.service`, upvote/unvote endpoints | Report form: category, description, photo (picker + manipulator), GPS pin on map | Seed script: 1 resolved pothole + 3–4 neighbours |
 | 14:15–15:00 | Bug fixes from integration; `GET /issues/:id` with evidence | **Flip mock OFF**, wire real API; `DuplicateSheet` for `needs_confirmation`; upvote button with login gate | **Integration session #1** — full report flow on a real Android phone |
 | 15:00–15:30 | Edge cases: validation messages, big file, no GPS | Issue detail screen, loading/empty/error states | Tune priority weights |

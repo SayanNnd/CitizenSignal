@@ -29,8 +29,7 @@
           "photosPermission": "CitizenSignal needs access to your photos to attach evidence to a report.",
           "cameraPermission": "CitizenSignal needs the camera to photograph the issue you are reporting."
         }
-      ],
-      "expo-web-browser"
+      ]
     ],
     "scheme": "citizensignal",
     "web": {

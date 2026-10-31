@@ -11,22 +11,24 @@ function extractToken(req: Request): string | null {
 }
 
 /**
- * Public name shown on comments: "Meera Krishnan" → "Meera K.". Comes from the Google profile;
- * never derived from the email, so addresses aren't exposed. No name → "Citizen".
+ * Public name shown on comments. A profile name becomes "Meera K."; email/password accounts have
+ * none, so they get the part of the email before the @ (never the full address). Else "Citizen".
  */
-function displayName(metadata: Record<string, unknown> | undefined): string {
+function displayName(metadata: Record<string, unknown> | undefined, email: string | undefined): string {
   const full = metadata?.full_name ?? metadata?.name;
-  if (typeof full !== 'string' || !full.trim()) return 'Citizen';
-  const [first, ...rest] = full.trim().split(/\s+/);
-  const last = rest.at(-1);
-  return last ? `${first} ${last[0].toUpperCase()}.` : first;
+  if (typeof full === 'string' && full.trim()) {
+    const [first, ...rest] = full.trim().split(/\s+/);
+    const last = rest.at(-1);
+    return last ? `${first} ${last[0].toUpperCase()}.` : first;
+  }
+  return email?.split('@')[0] || 'Citizen';
 }
 
 /** Verifies the token with Supabase Auth. Returns null for missing, invalid or expired tokens. */
 async function verifyToken(token: string): Promise<AuthUser | null> {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return null;
-  return { id: data.user.id, email: data.user.email, name: displayName(data.user.user_metadata) };
+  return { id: data.user.id, email: data.user.email, name: displayName(data.user.user_metadata, data.user.email) };
 }
 
 /** Rejects the request with 401 unless it carries a valid Bearer token. */
