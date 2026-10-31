@@ -57,7 +57,8 @@ export const white = '#FFFFFF';
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32 };
 
-export const radius = { sm: 8, md: 12, lg: 16, xl: 26, pill: 999 };
+/** Deliberately tight corners; circles (avatars, map buttons) use size / 2 instead. */
+export const radius = { sm: 3, md: 4, lg: 6, xl: 10, pill: 999 };
 
 export const fonts = {
   mono: Platform.select({ ios: 'Menlo', default: 'monospace' }) as string,

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, KeyboardAvoidingView, type ScrollViewInstance,
 } from 'react-native';
@@ -11,9 +11,18 @@ import { CommentComposer, CommentList } from '@/components/Comments';
 import { Icon } from '@/components/Icon';
 import { PriorityMeter } from '@/components/PriorityMeter';
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/constants/categories';
-import { caseNo, fmtDate, timeAgo } from '@/lib/format';
-import { radius, shadow, spacing } from '@/constants/theme';
+import { fmtDate, timeAgo } from '@/lib/format';
+import { radius, spacing, white } from '@/constants/theme';
 import { useThemed, type ThemeValues } from '@/theme/ThemeProvider';
+
+interface TimelineEvent {
+  key: string;
+  kind: 'report' | 'fixed';
+  label: string;
+  date: string;
+  text?: string;
+  image?: string | null;
+}
 
 export default function IssueDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -28,17 +37,28 @@ export default function IssueDetailScreen() {
   const comments = useComments(id);
   const addComment = useAddComment(id);
 
+  // Upvote tapped while logged out: remember it, send the user to /login, finish it on return.
+  const pendingUpvote = useRef(false);
+  const issueLoaded = data?.issue;
+  useEffect(() => {
+    if (!user || !pendingUpvote.current || !issueLoaded) return;
+    pendingUpvote.current = false;
+    if (!issueLoaded.has_upvoted) {
+      add.mutate(id, { onError: () => Alert.alert('Error', 'Could not upvote.') });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, issueLoaded]);
+
   if (isLoading) return <LoadingState label="Loading issue…" />;
   if (isError || !data) return <ErrorState message="Couldn't load this issue." onRetry={() => refetch()} />;
 
   const { issue, evidence } = data;
   const tint = CATEGORY_COLORS[issue.category];
-  const resolved = issue.status === 'resolved';
-  const statusColor = resolved ? colors.success : colors.accent;
   const busy = add.isPending || remove.isPending;
+  const commentCount = comments.data?.length ?? issue.comment_count ?? 0;
 
   function handleUpvote() {
-    if (!user) { router.push('/login'); return; }
+    if (!user) { pendingUpvote.current = true; router.push('/login'); return; }
     if (issue.has_upvoted) {
       remove.mutate(id, { onError: () => Alert.alert('Error', 'Could not remove upvote.') });
     } else {
@@ -57,70 +77,43 @@ export default function IssueDetailScreen() {
     }
   }
 
-  const events = [
-    { key: 'created', label: 'Reported', date: issue.created_at, color: colors.muted },
-    ...(issue.resolved_at ? [{ key: 'resolved', label: 'Marked resolved', date: issue.resolved_at, color: colors.success }] : []),
-    ...(issue.reopened_at ? [{ key: 'reopened', label: 'Reopened, it came back', date: issue.reopened_at, color: colors.accent }] : []),
+  // Every report (the first one plus each one merged in as evidence) and the fix date, oldest first.
+  // The API only keeps the most recent fix date, so earlier fixes of a recurring issue can't be listed.
+  const events: TimelineEvent[] = [
+    { key: 'created', kind: 'report' as const, label: 'Reported', date: issue.created_at },
+    ...evidence.map((e) => ({
+      key: e.id, kind: 'report' as const, label: 'Reported again', date: e.created_at, text: e.description, image: e.image_url,
+    })),
+    ...(issue.resolved_at ? [{ key: 'fixed', kind: 'fixed' as const, label: 'Fixed', date: issue.resolved_at }] : []),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <KeyboardAvoidingView style={s.root} behavior="padding">
       <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
-        {issue.image_url ? (
-          <Image source={{ uri: issue.image_url }} style={s.hero} />
-        ) : (
-          <View style={[s.hero, s.heroFallback, { backgroundColor: tint + '22' }]}>
-            {[200, 140, 84].map((d, i) => (
-              <View
-                key={d}
-                style={{
-                  position: 'absolute', width: d, height: d, borderRadius: d / 2, borderWidth: 2,
-                  borderColor: tint, opacity: 0.18 + i * 0.14,
-                }}
-              />
-            ))}
-            <Icon name={issue.category} size={52} color={tint} />
-          </View>
-        )}
-
-        <View style={s.body}>
-          <View style={s.ticketRow}>
+        <View style={s.post}>
+          <View style={s.header}>
+            <View style={[s.avatar, { backgroundColor: tint }]}>
+              <Icon name={issue.category} size={26} color={white} />
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={[s.category, { color: tint }]}>{CATEGORY_LABELS[issue.category].toUpperCase()}</Text>
-              <Text style={s.caseNo}>CASE {caseNo(issue.id)}</Text>
+              <Text style={s.category}>{CATEGORY_LABELS[issue.category]}</Text>
+              <Text style={s.when}>{timeAgo(issue.created_at) === 'now' ? 'Just now' : `${timeAgo(issue.created_at)} ago`}</Text>
             </View>
-            <View style={[s.stamp, { borderColor: statusColor }]}>
-              <Text style={[s.stampText, { color: statusColor }]}>{resolved ? 'RESOLVED' : 'OPEN'}</Text>
-            </View>
+            <PriorityMeter priority={issue.priority} />
           </View>
 
-          <Text style={s.title}>{issue.title}</Text>
-          {issue.recurrence_count > 0 && (
-            <View style={s.returned}>
-              <Text style={s.returnedText}>Came back {issue.recurrence_count} time{issue.recurrence_count === 1 ? '' : 's'} after being fixed</Text>
-            </View>
-          )}
-          <Text style={s.description}>{issue.description}</Text>
+          <Text style={s.text}>{issue.description}</Text>
+          {issue.image_url ? <Image source={{ uri: issue.image_url }} style={s.media} /> : null}
+          <Text style={s.date}>{fmtDate(issue.created_at)}</Text>
+        </View>
 
-          <View style={s.stats}>
-            <View style={s.stat}>
-              <Text style={s.statValue}>{issue.upvotes}</Text>
-              <Text style={s.statLabel}>UPVOTES</Text>
-            </View>
-            <View style={s.stat}>
-              <Text style={s.statValue}>{issue.evidence_count}</Text>
-              <Text style={s.statLabel}>REPORTS</Text>
-            </View>
-            <View style={s.stat}>
-              <Text style={s.statValue}>{resolved ? '-' : `${Math.floor(issue.days_open)}d`}</Text>
-              <Text style={s.statLabel}>OPEN FOR</Text>
-            </View>
-            <View style={s.stat}>
-              <PriorityMeter priority={issue.priority} resolved={resolved} />
-              <Text style={s.statLabel}>PRIORITY</Text>
-            </View>
-          </View>
+        <View style={s.statsLine}>
+          <Text style={s.statText}><Text style={s.statNum}>{issue.upvotes}</Text> Upvotes</Text>
+          <Text style={s.statText}><Text style={s.statNum}>{issue.evidence_count}</Text> Reports</Text>
+          <Text style={s.statText}><Text style={s.statNum}>{commentCount}</Text> Comments</Text>
+        </View>
 
+        <View style={s.actionBar}>
           <TouchableOpacity
             style={[s.upvote, issue.has_upvoted && s.upvoted]}
             onPress={handleUpvote}
@@ -129,53 +122,44 @@ export default function IssueDetailScreen() {
           >
             <Icon name={issue.has_upvoted ? 'check' : 'arrow-up'} size={18} color={issue.has_upvoted ? colors.ink : colors.onAccent} />
             <Text style={[s.upvoteText, issue.has_upvoted && { color: colors.ink }]}>
-              {issue.has_upvoted ? 'UPVOTED, TAP TO UNDO' : user ? 'UPVOTE THIS ISSUE' : 'LOG IN TO UPVOTE'}
+              {issue.has_upvoted ? 'Upvoted' : user ? 'Upvote' : 'Log in to upvote'}
             </Text>
           </TouchableOpacity>
+        </View>
 
-          <Text style={s.label}>TIMELINE</Text>
-          <View style={s.timeline}>
-            {events.map((e, i) => (
+        <Text style={s.label}>Timeline</Text>
+        <View style={s.timeline}>
+          {events.map((e, i) => {
+            const fixed = e.kind === 'fixed';
+            const last = i === events.length - 1;
+            return (
               <View key={e.key} style={s.eventRow}>
                 <View style={s.rail}>
-                  <View style={[s.eventDot, { backgroundColor: e.color }]} />
-                  {i < events.length - 1 && <View style={s.eventLine} />}
-                </View>
-                <View style={{ flex: 1, paddingBottom: i < events.length - 1 ? spacing.lg : 0 }}>
-                  <Text style={s.eventLabel}>{e.label}</Text>
-                  <Text style={s.eventDate}>{fmtDate(e.date)}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-
-          <Text style={s.label}>EVIDENCE ({evidence.length})</Text>
-          {evidence.length === 0 ? (
-            <Text style={s.empty}>No extra reports yet. Reporting the same problem here adds your photo as evidence.</Text>
-          ) : (
-            evidence.map((e) => (
-              <View key={e.id} style={s.evidence}>
-                {e.image_url ? <Image source={{ uri: e.image_url }} style={s.evidenceImg} /> : (
-                  <View style={[s.evidenceImg, s.evidenceFallback]}>
-                    <Icon name="camera" size={20} color={colors.muted} />
+                  <View style={[s.eventDot, { backgroundColor: fixed ? colors.success : colors.accent }]}>
+                    <Icon name={fixed ? 'check' : 'camera'} size={12} color={white} />
                   </View>
-                )}
-                <View style={{ flex: 1 }}>
-                  <Text style={s.evidenceText}>{e.description}</Text>
-                  <Text style={s.eventDate}>{timeAgo(e.created_at)}</Text>
+                  {!last && <View style={s.eventLine} />}
+                </View>
+                <View style={[s.eventBody, !last && { paddingBottom: spacing.lg }]}>
+                  <View style={s.eventHead}>
+                    <Text style={[s.eventLabel, fixed && { color: colors.success }]}>{e.label}</Text>
+                    <Text style={s.eventDate}>{fmtDate(e.date)}</Text>
+                  </View>
+                  {e.text ? <Text style={s.eventText}>{e.text}</Text> : null}
+                  {e.image ? <Image source={{ uri: e.image }} style={s.eventImg} /> : null}
                 </View>
               </View>
-            ))
-          )}
-
-          <Text style={s.label}>DISCUSSION ({comments.data?.length ?? issue.comment_count ?? 0})</Text>
-          <CommentList
-            comments={comments.data}
-            isLoading={comments.isLoading}
-            isError={comments.isError}
-            onRetry={() => comments.refetch()}
-          />
+            );
+          })}
         </View>
+
+        <Text style={s.label}>Comments</Text>
+        <CommentList
+          comments={comments.data}
+          isLoading={comments.isLoading}
+          isError={comments.isError}
+          onRetry={() => comments.refetch()}
+        />
       </ScrollView>
 
       <CommentComposer
@@ -194,55 +178,43 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     root: { flex: 1, backgroundColor: colors.bg },
     scroll: { flex: 1 },
     content: { paddingBottom: spacing.xl },
-    hero: { width: '100%', height: 230 },
-    heroFallback: { alignItems: 'center', justifyContent: 'center' },
-    body: {
-      padding: spacing.lg, marginTop: -radius.xl, backgroundColor: colors.bg,
-      borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl,
+    post: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
+    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
+    avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+    category: { fontSize: 16, fontWeight: '800', color: colors.ink },
+    when: { fontSize: 14, color: colors.muted },
+    text: { fontSize: 18, lineHeight: 26, color: colors.ink },
+    media: {
+      width: '100%', height: 240, borderRadius: radius.lg, marginTop: spacing.md,
+      borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line,
     },
-    ticketRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, marginBottom: spacing.md },
-    category: { fontSize: 12, fontWeight: '900', letterSpacing: 1.4 },
-    caseNo: { ...type.mono, marginTop: 2 },
-    stamp: {
-      borderWidth: 2.5, borderRadius: 6, paddingHorizontal: 10, paddingVertical: 3, transform: [{ rotate: '-4deg' }],
+    date: { ...type.caption, fontSize: 14, marginTop: spacing.md, marginBottom: spacing.md },
+    statsLine: {
+      flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+      borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.line,
     },
-    stampText: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
-    title: { ...type.display, fontSize: 25, marginBottom: spacing.sm },
-    returned: {
-      alignSelf: 'flex-start', backgroundColor: colors.accentSoft, borderRadius: radius.sm,
-      paddingHorizontal: spacing.sm, paddingVertical: 3, marginBottom: spacing.sm,
+    statText: { fontSize: 14, color: colors.muted },
+    statNum: { fontWeight: '800', color: colors.ink },
+    actionBar: {
+      paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.line,
     },
-    returnedText: { color: colors.accent, fontWeight: '800', fontSize: 12 },
-    description: { ...type.body, fontSize: 15, lineHeight: 23 },
-    stats: { flexDirection: 'row', gap: spacing.sm, marginVertical: spacing.xl },
-    stat: {
-      flex: 1, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.line,
-      height: 66, alignItems: 'center', justifyContent: 'center', gap: 4,
-    },
-    statValue: { fontFamily: type.mono.fontFamily, fontSize: 20, fontWeight: '800', color: colors.ink },
-    statLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 1, color: colors.muted },
     upvote: {
-      flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.accent, borderRadius: 18, height: 56,
-      alignItems: 'center', justifyContent: 'center', ...shadow.float,
+      flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.accent, borderRadius: radius.md, height: 46,
+      alignItems: 'center', justifyContent: 'center',
     },
-    upvoted: { backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.line, shadowOpacity: 0, elevation: 0 },
-    upvoteText: { color: colors.onAccent, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
-    label: { ...type.label, marginTop: spacing.xl, marginBottom: spacing.md },
-    timeline: {
-      backgroundColor: colors.surface, borderRadius: radius.lg, borderWidth: 1.5, borderColor: colors.line, padding: spacing.lg,
-    },
+    upvoted: { backgroundColor: colors.surfaceAlt },
+    upvoteText: { color: colors.onAccent, fontSize: 15, fontWeight: '800' },
+    label: { ...type.heading, fontSize: 17, paddingHorizontal: spacing.lg, marginTop: spacing.xl, marginBottom: spacing.md },
+    timeline: { paddingHorizontal: spacing.lg },
     eventRow: { flexDirection: 'row', gap: spacing.md },
-    rail: { alignItems: 'center', width: 14 },
-    eventDot: { width: 12, height: 12, borderRadius: 6, marginTop: 3 },
-    eventLine: { flex: 1, width: 2, backgroundColor: colors.line, marginTop: 4 },
-    eventLabel: { fontSize: 14, fontWeight: '700', color: colors.ink },
-    eventDate: type.mono,
-    empty: type.body,
-    evidence: {
-      flexDirection: 'row', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md,
-      borderWidth: 1.5, borderColor: colors.line, padding: spacing.md, marginBottom: spacing.sm,
-    },
-    evidenceImg: { width: 60, height: 60, borderRadius: radius.sm },
-    evidenceFallback: { backgroundColor: colors.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-    evidenceText: { fontSize: 14, color: colors.ink, marginBottom: 2 },
+    rail: { alignItems: 'center', width: 24 },
+    eventDot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    eventLine: { flex: 1, width: 2, backgroundColor: colors.line, marginTop: 2 },
+    eventBody: { flex: 1 },
+    eventHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.sm, minHeight: 24 },
+    eventLabel: { fontSize: 15, fontWeight: '800', color: colors.ink },
+    eventDate: { fontSize: 13, color: colors.muted },
+    eventText: { fontSize: 14, color: colors.inkSoft, lineHeight: 20, marginTop: 2 },
+    eventImg: { width: '100%', height: 150, borderRadius: radius.lg, marginTop: spacing.sm },
   });

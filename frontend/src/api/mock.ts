@@ -1,4 +1,4 @@
-import type { Candidate, Category, Comment, Evidence, Issue, ReportResponse } from '../types';
+import type { Candidate, Category, Comment, Evidence, Issue, MyIssue, MyRole, ReportResponse, Status } from '../types';
 
 /**
  * In-memory fixtures that follow the §4 contract exactly. Issues are stored as offsets from
@@ -21,7 +21,7 @@ const store: Stored[] = [
     id: '22222222-2222-2222-2222-222222222222', category: 'pothole', title: 'Pothole: Deep pothole on main road',
     description: 'Deep pothole on main road causing traffic slowdown', dLat: -0.0021, dLng: 0.0014,
     status: 'open', image_url: null, upvotes: 5, evidence_count: 2, recurrence_count: 1,
-    created_at: ago(3), resolved_at: null, reopened_at: ago(1), has_upvoted: false,
+    created_at: ago(3), resolved_at: ago(2), reopened_at: ago(1), has_upvoted: false,
   },
   {
     id: '33333333-3333-3333-3333-333333333333', category: 'streetlight', title: 'Streetlight: Broken streetlight',
@@ -60,6 +60,9 @@ const evidenceStore: Record<string, Evidence[]> = {
     { id: 'e1', issue_id: '11111111-1111-1111-1111-111111111111', description: 'Still there this morning, got worse after the rain.', image_url: null, latitude: 0, longitude: 0, created_at: ago(9) },
     { id: 'e2', issue_id: '11111111-1111-1111-1111-111111111111', description: 'A scooter almost slipped here yesterday.', image_url: null, latitude: 0, longitude: 0, created_at: ago(12) },
   ],
+  '22222222-2222-2222-2222-222222222222': [
+    { id: 'e4', issue_id: '22222222-2222-2222-2222-222222222222', description: 'It is back. The patch broke up after one day of rain.', image_url: null, latitude: 0, longitude: 0, created_at: ago(1) },
+  ],
   '44444444-4444-4444-4444-444444444444': [
     { id: 'e3', issue_id: '44444444-4444-4444-4444-444444444444', description: 'Bin has not been emptied for two weeks now.', image_url: null, latitude: 0, longitude: 0, created_at: ago(2) },
   ],
@@ -93,8 +96,9 @@ let anchor = { latitude: 28.6139, longitude: 77.209 };
 function hydrate(s: Stored): Issue {
   const { dLat, dLng, ...rest } = s;
   const since = s.reopened_at ?? s.created_at;
-  const days_open = s.status === 'resolved' ? 0 : Math.max(0, (Date.now() - new Date(since).getTime()) / DAY);
-  const priority = 2 * s.upvotes + s.evidence_count + 5 * s.recurrence_count + 1.5 * days_open;
+  // Real API returns days_open as a whole number and priority rounded to 1 decimal.
+  const days_open = s.status === 'resolved' ? 0 : Math.max(0, Math.floor((Date.now() - new Date(since).getTime()) / DAY));
+  const priority = Math.round((2 * s.upvotes + s.evidence_count + 5 * s.recurrence_count + 1.5 * days_open) * 10) / 10;
   const comment_count = (commentStore[s.id] ?? []).length;
   return { ...rest, latitude: anchor.latitude + dLat, longitude: anchor.longitude + dLng, priority, days_open, comment_count };
 }
@@ -108,10 +112,10 @@ function field(fd: FormData, key: string): string | undefined {
   return hit ? String(hit[1]) : undefined;
 }
 
-export async function mockListIssues(lat: number, lng: number): Promise<{ issues: Issue[] }> {
+export async function mockListIssues(lat: number, lng: number, status?: Status): Promise<{ issues: Issue[] }> {
   await wait(300);
   anchor = { latitude: lat, longitude: lng };
-  return { issues: store.map(hydrate).sort(byPriority) };
+  return { issues: store.filter((i) => !status || i.status === status).map(hydrate).sort(byPriority) };
 }
 
 export async function mockGetIssue(id: string): Promise<{ issue: Issue; evidence: Evidence[] }> {
@@ -121,9 +125,27 @@ export async function mockGetIssue(id: string): Promise<{ issue: Issue; evidence
   return { issue: hydrate(s), evidence: evidenceStore[id] ?? [] };
 }
 
-export async function mockListMyIssues(): Promise<{ issues: Issue[] }> {
+/** Issues the (mock) user reported or contributed evidence to, newest own activity first. */
+const mine: Record<string, { role: MyRole; at: number }> = {
+  '22222222-2222-2222-2222-222222222222': { role: 'reporter', at: Date.now() - 3 * DAY },
+  '11111111-1111-1111-1111-111111111111': { role: 'contributor', at: Date.now() - 9 * DAY },
+};
+
+function markMine(id: string, role: MyRole) {
+  const prev = mine[id];
+  // reporting an issue stays "reporter" even if the same user adds more evidence later
+  mine[id] = { role: prev?.role === 'reporter' ? 'reporter' : role, at: Date.now() };
+}
+
+export async function mockListMyIssues(): Promise<{ issues: MyIssue[] }> {
   await wait(300);
-  return { issues: store.slice(1, 3).map(hydrate).sort(byPriority) };
+  const issues = Object.entries(mine)
+    .sort(([, a], [, b]) => b.at - a.at)
+    .flatMap(([id, m]) => {
+      const s = store.find((i) => i.id === id);
+      return s ? [{ ...hydrate(s), my_role: m.role }] : [];
+    });
+  return { issues };
 }
 
 export async function mockSetUpvote(id: string, value: boolean): Promise<{ issue: Issue }> {
@@ -164,13 +186,13 @@ export async function mockReportIssue(fd: FormData): Promise<ReportResponse> {
     s.evidence_count += 1;
     if (wasResolved) {
       s.status = 'open';
-      s.resolved_at = null;
       s.reopened_at = new Date().toISOString();
       s.recurrence_count += 1;
     }
     (evidenceStore[s.id] ??= []).unshift({
       id: `e-${Date.now()}`, issue_id: s.id, description, image_url: null, latitude, longitude, created_at: new Date().toISOString(),
     });
+    markMine(s.id, 'contributor');
     return { outcome: wasResolved ? 'reopened' : 'merged', issue: hydrate(s) };
   }
 
@@ -191,6 +213,7 @@ export async function mockReportIssue(fd: FormData): Promise<ReportResponse> {
     resolved_at: null, reopened_at: null, has_upvoted: false,
   };
   store.push(created);
+  markMine(created.id, 'reporter');
   return { outcome: 'created', issue: hydrate(created) };
 }
 

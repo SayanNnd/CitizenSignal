@@ -3,19 +3,22 @@ import {
   mockListIssues, mockGetIssue, mockReportIssue, mockListMyIssues, mockSetUpvote, mockListComments, mockAddComment,
 } from './mock';
 import { USE_MOCK } from '../lib/env';
-import type { Issue, Evidence, ReportResponse, Comment } from '../types';
+import { DEFAULT_RADIUS_M, MAX_RADIUS_M } from '../constants/limits';
+import type { Issue, MyIssue, Evidence, ReportResponse, Comment, Status } from '../types';
 
 export async function listIssues(params: {
   lat: number;
   lng: number;
   radius_m?: number;
+  status?: Status;
 }): Promise<{ issues: Issue[] }> {
-  if (USE_MOCK) return mockListIssues(params.lat, params.lng);
+  if (USE_MOCK) return mockListIssues(params.lat, params.lng, params.status);
   const q = new URLSearchParams({
     lat: String(params.lat),
     lng: String(params.lng),
-    radius_m: String(params.radius_m ?? 2000),
+    radius_m: String(Math.min(params.radius_m ?? DEFAULT_RADIUS_M, MAX_RADIUS_M)),
   });
+  if (params.status) q.set('status', params.status);
   return apiFetch(`/api/issues?${q}`);
 }
 
@@ -39,8 +42,8 @@ export async function removeUpvote(issueId: string): Promise<{ issue: Issue }> {
   return apiFetch(`/api/issues/${issueId}/upvote`, { method: 'DELETE' });
 }
 
-/** Issues reported by the logged-in user. Proposed endpoint — not in roadmap §4 yet. */
-export async function listMyIssues(): Promise<{ issues: Issue[] }> {
+/** Issues the caller reported or contributed evidence to (requires auth; 401 otherwise). */
+export async function listMyIssues(): Promise<{ issues: MyIssue[] }> {
   if (USE_MOCK) return mockListMyIssues();
   return apiFetch('/api/issues/mine');
 }

@@ -2,7 +2,6 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal } from 'react-native';
 import type { Candidate } from '../types';
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '../constants/categories';
-import { caseNo } from '../lib/format';
 import { radius, spacing } from '../constants/theme';
 import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 import { Icon } from './Icon';
@@ -33,16 +32,10 @@ export function DuplicateSheet({ visible, candidates, onConfirm, onForceNew, onD
                     <Icon name={c.category} size={26} color={tint} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.candidateTitle}>{c.title}</Text>
+                    <Text style={s.candidateTitle} numberOfLines={2}>{c.description}</Text>
                     <Text style={s.meta}>
-                      {CATEGORY_LABELS[c.category]}  {caseNo(c.id)}  {Math.round(c.distance_m)} m  {Math.round(c.text_score * 100)}% match
+                      {CATEGORY_LABELS[c.category]}  ·  {Math.round(c.distance_m)} m away  ·  {Math.round(c.text_score * 100)}% similar
                     </Text>
-                    <View style={s.tagRow}>
-                      <Text style={[s.tag, { color: c.status === 'resolved' ? colors.success : colors.accent }]}>
-                        {c.status.toUpperCase()}
-                      </Text>
-                      {c.recurrence_count > 0 && <Text style={s.recurrence}>Returned {c.recurrence_count}x before</Text>}
-                    </View>
                   </View>
                   <Icon name="chevron-right" size={18} color={colors.muted} />
                 </TouchableOpacity>
@@ -78,10 +71,7 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     },
     tile: { width: 48, height: 48, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
     candidateTitle: { fontSize: 14, fontWeight: '800', color: colors.ink, marginBottom: 2 },
-    meta: { ...type.mono, fontSize: 11 },
-    tagRow: { flexDirection: 'row', gap: spacing.md, marginTop: 4 },
-    tag: { fontSize: 10.5, fontWeight: '800', letterSpacing: 0.8 },
-    recurrence: { fontSize: 11, color: colors.accent, fontWeight: '800' },
+    meta: { fontSize: 13, color: colors.muted, marginTop: 2 },
     newBtn: { backgroundColor: colors.ink, borderRadius: radius.md, height: 50, alignItems: 'center', justifyContent: 'center', marginTop: spacing.md },
     newBtnText: { fontSize: 14, fontWeight: '800', color: colors.surface },
     cancelBtn: { alignItems: 'center', marginTop: spacing.sm, padding: spacing.sm },

@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useIssues } from '@/hooks/useIssues';
 import { useAuth } from '@/auth/AuthProvider';
 import { useLocationContext } from '@/location/LocationProvider';
-import { IssueSheet, type IssueFilter, type Snap } from '@/components/IssueSheet';
+import { IssueSheet, type Snap } from '@/components/IssueSheet';
 import { MenuDrawer, type MenuItem } from '@/components/MenuDrawer';
 import { RoundButton } from '@/components/RoundButton';
 import { CompassButton } from '@/components/CompassButton';
@@ -33,39 +33,18 @@ export default function HomeScreen() {
   const [sheetH, setSheetH] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [heading, setHeading] = useState(0);
-  const [filter, setFilter] = useState<IssueFilter>('all');
   const [trackMarkers, setTrackMarkers] = useState(true);
 
+  // useIssues asks the API for open issues only; fixed ones are not shown on the map or in the feed.
   const { data, isLoading, isError, refetch } = useIssues(center.latitude, center.longitude, radiusM);
-  const all = useMemo(() => data ?? [], [data]);
-
-  const issues = useMemo(
-    () =>
-      all.filter((i) =>
-        filter === 'all' ? true
-        : filter === 'open' ? i.status === 'open'
-        : filter === 'resolved' ? i.status === 'resolved'
-        : i.recurrence_count > 0,
-      ),
-    [all, filter],
-  );
-
-  const counts = useMemo<Record<IssueFilter, number>>(
-    () => ({
-      all: all.length,
-      open: all.filter((i) => i.status === 'open').length,
-      resolved: all.filter((i) => i.status === 'resolved').length,
-      recurring: all.filter((i) => i.recurrence_count > 0).length,
-    }),
-    [all],
-  );
+  const issues = useMemo(() => data ?? [], [data]);
 
   // Custom markers only need to re-render briefly when their content changes.
   useEffect(() => {
     setTrackMarkers(true);
     const t = setTimeout(() => setTrackMarkers(false), 800);
     return () => clearTimeout(t);
-  }, [issues.length, focusedIssueId, isDark, filter]);
+  }, [issues.length, focusedIssueId, isDark]);
 
   // Fly to a newly selected locality and show its issues.
   useEffect(() => {
@@ -81,9 +60,8 @@ export default function HomeScreen() {
   // An issue picked from search (or tapped on the map) gets zoomed to and listed.
   useEffect(() => {
     if (!focusedIssueId) return;
-    const issue = all.find((i) => i.id === focusedIssueId);
+    const issue = issues.find((i) => i.id === focusedIssueId);
     if (!issue) return;
-    setFilter('all');
     mapRef.current?.animateToRegion(
       { latitude: issue.latitude - 0.0012, longitude: issue.longitude, latitudeDelta: 0.006, longitudeDelta: 0.006 },
       500,
@@ -94,12 +72,21 @@ export default function HomeScreen() {
 
   const onVisibleHeight = useCallback((h: number) => setSheetH(h), []);
 
-  function syncHeading() {
-    mapRef.current?.getCamera().then((c) => setHeading(c.heading ?? 0)).catch(() => {});
-  }
+  // Read the camera heading while the map moves (not only when it stops) so the compass can follow.
+  // One request at a time; the compass itself animates between readings.
+  const headingBusy = useRef(false);
+  const syncHeading = useCallback(() => {
+    if (headingBusy.current || !mapRef.current) return;
+    headingBusy.current = true;
+    mapRef.current
+      .getCamera()
+      .then((c) => setHeading(c.heading ?? 0))
+      .catch(() => {})
+      .finally(() => { headingBusy.current = false; });
+  }, []);
 
   function faceNorth() {
-    mapRef.current?.animateCamera({ heading: 0 }, { duration: 300 });
+    mapRef.current?.animateCamera({ heading: 0 }, { duration: 400 });
   }
 
   function requireLogin(go: () => void) {
@@ -135,6 +122,7 @@ export default function HomeScreen() {
         showsMyLocationButton={false}
         showsCompass={false}
         toolbarEnabled={false}
+        onRegionChange={syncHeading}
         onRegionChangeComplete={syncHeading}
         onPress={() => snap === 'full' && setSnap('half')}
       >
@@ -148,8 +136,6 @@ export default function HomeScreen() {
         {!loc.isCurrent && <Marker coordinate={center} pinColor={colors.ink} title={center.label} />}
         {issues.map((issue) => {
           const selected = issue.id === focusedIssueId;
-          const resolved = issue.status === 'resolved';
-          const tint = CATEGORY_COLORS[issue.category];
           return (
             <Marker
               key={issue.id}
@@ -162,18 +148,9 @@ export default function HomeScreen() {
               }}
             >
               <View style={s.pinBox}>
-                <View
-                  style={[
-                    s.pin,
-                    resolved
-                      ? { backgroundColor: colors.surface, borderColor: colors.success }
-                      : { backgroundColor: tint, borderColor: white },
-                    selected && s.pinSelected,
-                  ]}
-                >
-                  <Icon name={issue.category} size={selected ? 22 : 19} color={resolved ? colors.success : white} />
+                <View style={[s.pin, { backgroundColor: CATEGORY_COLORS[issue.category] }, selected && s.pinSelected]}>
+                  <Icon name={issue.category} size={selected ? 22 : 19} color={white} />
                 </View>
-                {issue.recurrence_count > 0 && <View style={s.pinBadge} />}
               </View>
             </Marker>
           );
@@ -220,9 +197,6 @@ export default function HomeScreen() {
         address={center.label}
         radiusLabel={radiusM >= 1000 ? `${radiusM / 1000} km` : `${radiusM} m`}
         focusedId={focusedIssueId}
-        filter={filter}
-        onFilterChange={setFilter}
-        counts={counts}
         onOpenSearch={() => router.push('/search')}
         onOpenIssue={(id) => router.push(`/issue/${id}`)}
         onVisibleHeight={onVisibleHeight}
@@ -237,7 +211,7 @@ export default function HomeScreen() {
           accessibilityLabel="New post"
         >
           <Icon name="plus" size={20} color={colors.onAccent} />
-          <Text style={s.newPostText}>NEW POST</Text>
+          <Text style={s.newPostText}>New post</Text>
         </TouchableOpacity>
       )}
 
@@ -251,7 +225,7 @@ const makeStyles = ({ colors }: ThemeValues) =>
     root: { flex: 1, backgroundColor: colors.bg },
     sideButtons: { position: 'absolute', right: spacing.lg, gap: spacing.md },
     notice: {
-      position: 'absolute', left: 80, right: spacing.lg, height: 48, borderRadius: radius.pill,
+      position: 'absolute', left: 80, right: spacing.lg, height: 48, borderRadius: radius.md,
       backgroundColor: colors.ink, flexDirection: 'row', gap: spacing.sm, alignItems: 'center',
       justifyContent: 'center', ...shadow.float,
     },
@@ -259,17 +233,13 @@ const makeStyles = ({ colors }: ThemeValues) =>
     pinBox: { width: 50, height: 50, alignItems: 'center', justifyContent: 'center' },
     pin: {
       width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center',
-      borderWidth: 3, ...shadow.card,
+      borderWidth: 3, borderColor: white, ...shadow.card,
     },
     pinSelected: { width: 46, height: 46, borderRadius: 23, borderColor: colors.ink },
-    pinBadge: {
-      position: 'absolute', top: 4, right: 4, width: 14, height: 14, borderRadius: 7,
-      backgroundColor: colors.ink, borderWidth: 2.5, borderColor: white,
-    },
     newPost: {
       position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-      backgroundColor: colors.accent, borderRadius: 18, paddingHorizontal: spacing.xl, height: 56,
+      backgroundColor: colors.accent, borderRadius: radius.md, paddingHorizontal: spacing.xl, height: 52,
       ...shadow.float,
     },
-    newPostText: { color: colors.onAccent, fontSize: 15, fontWeight: '900', letterSpacing: 1.4 },
+    newPostText: { color: colors.onAccent, fontSize: 16, fontWeight: '800' },
   });

@@ -249,7 +249,7 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     hint: type.caption,
     note: { ...type.body, padding: spacing.lg },
     inline: { padding: spacing.md },
-    issueWrap: { marginHorizontal: -spacing.xs },
+    issueWrap: {},
     inputBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, backgroundColor: colors.bg },
     input: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm, height: 52, borderRadius: radius.md,

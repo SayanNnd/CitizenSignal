@@ -31,6 +31,13 @@ export interface Issue {
   comment_count?: number;
 }
 
+export type MyRole = 'reporter' | 'contributor';
+
+/** GET /issues/mine item: an Issue plus how the caller relates to it (roadmap §4). */
+export interface MyIssue extends Issue {
+  my_role: MyRole;
+}
+
 export interface Evidence {
   id: string;
   issue_id: string;

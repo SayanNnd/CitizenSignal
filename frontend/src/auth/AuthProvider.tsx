@@ -1,14 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { USE_MOCK } from '../lib/env';
+import { USE_MOCK_AUTH } from '../lib/env';
+import { signInWithGoogleBrowser, type GoogleResult } from './google';
 
 interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<GoogleResult>;
   signOut: () => Promise<void>;
 }
 
@@ -20,10 +20,10 @@ function fakeSession(email: string): Session {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(!USE_MOCK);
+  const [loading, setLoading] = useState(!USE_MOCK_AUTH);
 
   useEffect(() => {
-    if (USE_MOCK) return;
+    if (USE_MOCK_AUTH) return;
 
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
@@ -37,26 +37,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    if (USE_MOCK) {
-      setSession(fakeSession(email));
+  const signInWithGoogle = async (): Promise<GoogleResult> => {
+    if (USE_MOCK_AUTH) {
+      setSession(fakeSession('demo.user@gmail.com'));
       return { error: null };
     }
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
-  };
-
-  const signUp = async (email: string, password: string) => {
-    if (USE_MOCK) {
-      setSession(fakeSession(email));
-      return { error: null };
-    }
-    const { error } = await supabase.auth.signUp({ email, password });
-    return { error: error?.message ?? null };
+    return signInWithGoogleBrowser();
   };
 
   const signOut = async () => {
-    if (USE_MOCK) {
+    if (USE_MOCK_AUTH) {
       setSession(null);
       return;
     }
@@ -64,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -3,10 +3,11 @@ import { listIssues, getIssue, reportIssue, addUpvote, removeUpvote, listMyIssue
 
 const ISSUES_KEY = 'issues';
 
+/** Nearby issues for the map, feed and search. Only open ones: fixed issues aren't shown to users. */
 export function useIssues(lat: number | null, lng: number | null, radius_m?: number) {
   return useQuery({
-    queryKey: [ISSUES_KEY, lat, lng, radius_m],
-    queryFn: () => listIssues({ lat: lat!, lng: lng!, radius_m }),
+    queryKey: [ISSUES_KEY, lat, lng, radius_m, 'open'],
+    queryFn: () => listIssues({ lat: lat!, lng: lng!, radius_m, status: 'open' }),
     enabled: lat !== null && lng !== null,
     select: (data) => data.issues,
   });
