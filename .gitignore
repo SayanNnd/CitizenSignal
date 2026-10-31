@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# Environment files (Never commit .env!)
+.env
+.env*.local
+
+# Build outputs
+dist/
+build/
+.expo/
+web-build/
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+*.log
