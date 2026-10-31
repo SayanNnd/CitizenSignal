@@ -1,114 +1,198 @@
 /**
- * Seed script: inserts repeatable demo data — one resolved pothole + 3 neighbours.
- * Run with: npm run seed
+ * Seed script: resets the database to a repeatable demo state and makes sure the
+ * `issue-images` storage bucket exists.
  *
- * Clears existing issues, evidence, and upvotes before inserting.
+ *   npm run seed                      # seeds around the default location (New Delhi)
+ *   npm run seed -- <lat> <lng>       # seeds around your demo location
+ *
+ * Clears ALL existing issues, evidence and upvotes before inserting.
  */
-import dotenv from 'dotenv';
-dotenv.config();
+import { z } from 'zod';
+import { supabase } from '../src/config/supabase.js';
+import { IMAGE_BUCKET } from '../src/services/image.service.js';
+import { generateTitle } from '../src/services/issues.service.js';
+import type { Category, Status } from '../src/types/index.js';
 
-import { createClient } from '@supabase/supabase-js';
+const DEFAULT_LAT = 28.6139;
+const DEFAULT_LNG = 77.209;
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { persistSession: false } },
-);
+// Each arg is optional; `.default()` only applies to `undefined`, so parse them one by one.
+const LatArg = z.coerce.number().min(-90).max(90).default(DEFAULT_LAT);
+const LngArg = z.coerce.number().min(-180).max(180).default(DEFAULT_LNG);
+
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * DAY_MS).toISOString();
+}
+
+interface SeedIssue {
+  label: string;
+  category: Category;
+  description: string;
+  dLat: number;
+  dLng: number;
+  status: Status;
+  upvotes: number;
+  recurrence_count: number;
+  createdDaysAgo: number;
+  resolvedDaysAgo?: number;
+  reopenedDaysAgo?: number;
+  /** Extra reports attached as evidence rows (evidence_count = 1 + this length). */
+  evidence: string[];
+}
+
+// Offsets are in degrees: 0.0001° ≈ 11 m of latitude.
+const SEED: SeedIssue[] = [
+  {
+    label: 'resolved pothole (demo: reopen)',
+    category: 'pothole',
+    description: 'Large pothole causing serious vehicle damage and flat tyres near the junction',
+    dLat: 0,
+    dLng: 0,
+    status: 'resolved',
+    upvotes: 8,
+    recurrence_count: 0,
+    createdDaysAgo: 21,
+    resolvedDaysAgo: 7,
+    evidence: ['Pothole at the junction is getting bigger', 'Two cars got flat tyres at this pothole today'],
+  },
+  {
+    label: 'open pothole ~19 m away (demo: needs_confirmation)',
+    category: 'pothole',
+    description: 'Deep pothole on main road causing traffic slowdown near signal',
+    dLat: 0.00015,
+    dLng: 0.0001,
+    status: 'open',
+    upvotes: 5,
+    recurrence_count: 1,
+    createdDaysAgo: 30,
+    resolvedDaysAgo: 12,
+    reopenedDaysAgo: 3,
+    evidence: ['The main road pothole is back after the repair'],
+  },
+  {
+    label: 'streetlight',
+    category: 'streetlight',
+    description: 'Broken streetlight making lane 4 completely dark and unsafe at night',
+    dLat: 0.0003,
+    dLng: -0.0002,
+    status: 'open',
+    upvotes: 3,
+    recurrence_count: 0,
+    createdDaysAgo: 2,
+    evidence: [],
+  },
+  {
+    label: 'garbage, aging',
+    category: 'garbage',
+    description: 'Overflowing garbage bin not cleared in two weeks causing foul smell',
+    dLat: -0.0004,
+    dLng: 0.0003,
+    status: 'open',
+    upvotes: 12,
+    recurrence_count: 2,
+    createdDaysAgo: 14,
+    evidence: ['Bin still overflowing, stray dogs spreading the rubbish', 'Smell is unbearable now', 'Still not cleared'],
+  },
+  {
+    label: 'water leak',
+    category: 'water_leak',
+    description: 'Water pipe leaking onto the footpath and flooding the bus stop',
+    dLat: 0.0006,
+    dLng: 0.0005,
+    status: 'open',
+    upvotes: 1,
+    recurrence_count: 0,
+    createdDaysAgo: 0,
+    evidence: [],
+  },
+];
+
+async function ensureBucket() {
+  const { data: buckets, error } = await supabase.storage.listBuckets();
+  if (error) throw new Error(`Listing buckets failed: ${error.message}`);
+  if (buckets.some((b) => b.name === IMAGE_BUCKET)) {
+    console.log(`  ✓ bucket "${IMAGE_BUCKET}" exists`);
+    return;
+  }
+  const { error: createError } = await supabase.storage.createBucket(IMAGE_BUCKET, {
+    public: true,
+    fileSizeLimit: '5MB',
+    allowedMimeTypes: ['image/webp'],
+  });
+  if (createError) throw new Error(`Creating bucket failed: ${createError.message}`);
+  console.log(`  ✓ bucket "${IMAGE_BUCKET}" created (public)`);
+}
+
+async function clearTables() {
+  // PostgREST refuses unfiltered deletes, so filter on something that's always true.
+  for (const [table, column] of [['upvotes', 'issue_id'], ['evidence', 'id'], ['issues', 'id']] as const) {
+    const { error } = await supabase.from(table).delete().neq(column, NIL_UUID);
+    if (error) throw new Error(`Clearing ${table} failed: ${error.message}`);
+  }
+}
 
 async function seed() {
-  console.log('🌱  Clearing existing data…');
-  await supabase.from('upvotes').delete().neq('issue_id', '00000000-0000-0000-0000-000000000000');
-  await supabase.from('evidence').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  await supabase.from('issues').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const [latArg, lngArg] = process.argv.slice(2);
+  const baseLat = LatArg.parse(latArg);
+  const baseLng = LngArg.parse(lngArg);
+  console.log(`🌱  Seeding around ${baseLat}, ${baseLng}`);
 
-  const BASE_LAT = 28.6139;
-  const BASE_LNG = 77.2090;
+  await ensureBucket();
+
+  console.log('🌱  Clearing existing data…');
+  await clearTables();
 
   console.log('🌱  Inserting seed issues…');
+  for (const s of SEED) {
+    const latitude = baseLat + s.dLat;
+    const longitude = baseLng + s.dLng;
 
-  // 1. Resolved pothole — the hero of the demo
-  const { data: resolved, error: e1 } = await supabase
-    .from('issues')
-    .insert({
-      category: 'pothole',
-      title: 'Pothole: Large pothole causing vehicle damage',
-      description: 'Large pothole causing serious vehicle damage and flat tyres near the junction',
-      latitude: BASE_LAT,
-      longitude: BASE_LNG,
-      status: 'resolved',
-      upvotes: 8,
-      evidence_count: 3,
-      recurrence_count: 0,
-      resolved_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    })
-    .select()
-    .single();
-  if (e1) throw e1;
-  console.log('  ✓ resolved pothole:', resolved.id);
+    const { data: issue, error } = await supabase
+      .from('issues')
+      .insert({
+        category: s.category,
+        title: generateTitle(s.category, s.description),
+        description: s.description,
+        latitude,
+        longitude,
+        status: s.status,
+        upvotes: s.upvotes,
+        evidence_count: 1 + s.evidence.length,
+        recurrence_count: s.recurrence_count,
+        created_at: daysAgo(s.createdDaysAgo),
+        resolved_at: s.resolvedDaysAgo === undefined ? null : daysAgo(s.resolvedDaysAgo),
+        reopened_at: s.reopenedDaysAgo === undefined ? null : daysAgo(s.reopenedDaysAgo),
+      })
+      .select('id')
+      .single();
+    if (error) throw new Error(`Inserting ${s.label} failed: ${error.message}`);
 
-  // 2. Open pothole next door (high priority)
-  const { data: open1, error: e2 } = await supabase
-    .from('issues')
-    .insert({
-      category: 'pothole',
-      title: 'Pothole: Deep pothole on main road',
-      description: 'Deep pothole on main road causing traffic slowdown near signal',
-      latitude: BASE_LAT + 0.00015,
-      longitude: BASE_LNG + 0.00010,
-      status: 'open',
-      upvotes: 5,
-      evidence_count: 2,
-      recurrence_count: 1,
-    })
-    .select()
-    .single();
-  if (e2) throw e2;
-  console.log('  ✓ open pothole:', open1.id);
+    if (s.evidence.length) {
+      const { error: evidenceError } = await supabase.from('evidence').insert(
+        s.evidence.map((description, i) => ({
+          issue_id: issue.id,
+          description,
+          latitude: latitude + 0.00002 * (i + 1),
+          longitude,
+          created_at: daysAgo(Math.max(0, s.createdDaysAgo - (i + 1))),
+        })),
+      );
+      if (evidenceError) throw new Error(`Inserting evidence for ${s.label} failed: ${evidenceError.message}`);
+    }
+    console.log(`  ✓ ${s.label}: ${issue.id}`);
+  }
 
-  // 3. Streetlight — open
-  const { data: light, error: e3 } = await supabase
-    .from('issues')
-    .insert({
-      category: 'streetlight',
-      title: 'Streetlight: Broken streetlight on lane 4',
-      description: 'Broken streetlight making lane 4 completely dark and unsafe at night',
-      latitude: BASE_LAT + 0.0003,
-      longitude: BASE_LNG - 0.0002,
-      status: 'open',
-      upvotes: 3,
-      evidence_count: 1,
-      recurrence_count: 0,
-    })
-    .select()
-    .single();
-  if (e3) throw e3;
-  console.log('  ✓ streetlight:', light.id);
-
-  // 4. Garbage — open, aging
-  const oldDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: garbage, error: e4 } = await supabase
-    .from('issues')
-    .insert({
-      category: 'garbage',
-      title: 'Garbage: Overflowing garbage bin',
-      description: 'Overflowing garbage bin not cleared in two weeks causing foul smell',
-      latitude: BASE_LAT - 0.0004,
-      longitude: BASE_LNG + 0.0003,
-      status: 'open',
-      upvotes: 12,
-      evidence_count: 4,
-      recurrence_count: 2,
-      created_at: oldDate,
-    })
-    .select()
-    .single();
-  if (e4) throw e4;
-  console.log('  ✓ garbage:', garbage.id);
-
-  console.log('\n✅  Seed complete. Run `npm run dev` and point the app at this data.');
+  console.log(`
+✅  Seed complete. Demo phrases (category: pothole):
+   reopen → at ${baseLat}, ${baseLng}:
+            "Large pothole is back causing serious vehicle damage near the junction"
+   confirm → at ${baseLat + 0.00015}, ${baseLng + 0.0001}:
+            "Deep pothole near the signal slowing traffic"`);
 }
 
 seed().catch((err) => {
-  console.error('❌  Seed failed:', err);
+  console.error('❌  Seed failed:', err instanceof Error ? err.message : err);
   process.exit(1);
 });
