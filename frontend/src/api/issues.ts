@@ -48,7 +48,7 @@ export async function listMyIssues(): Promise<{ issues: MyIssue[] }> {
   return apiFetch('/api/issues/mine');
 }
 
-/** Proposed endpoints — not in roadmap §4 yet. POST requires auth; the server takes the author from the token. */
+/** Discussion under an issue, oldest first. POST requires auth; the server takes the author from the token. */
 export async function listComments(issueId: string): Promise<{ comments: Comment[] }> {
   if (USE_MOCK) return mockListComments(issueId);
   return apiFetch(`/api/issues/${issueId}/comments`);

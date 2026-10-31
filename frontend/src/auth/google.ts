@@ -60,7 +60,7 @@ export async function signInWithGoogleBrowser(): Promise<GoogleResult> {
       });
       return { error: sessionError?.message ?? null };
     }
-    return { error: 'Google sign-in did not return a session. Try again or use email.' };
+    return { error: 'Google sign-in did not return a session. Please try again.' };
   } catch (e) {
     return { error: e instanceof Error ? e.message : 'Google sign-in failed.' };
   }
