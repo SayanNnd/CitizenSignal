@@ -9,9 +9,9 @@ import { useAuth } from '@/auth/AuthProvider';
 import { ErrorState, LoadingState } from '@/components/StateViews';
 import { CommentComposer, CommentList } from '@/components/Comments';
 import { Icon } from '@/components/Icon';
-import { PriorityMeter } from '@/components/PriorityMeter';
+import { SeverityTriangle } from '@/components/SeverityTriangle';
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/constants/categories';
-import { fmtDate, timeAgo } from '@/lib/format';
+import { displayTitle, fmtDate } from '@/lib/format';
 import { radius, spacing, white } from '@/constants/theme';
 import { useThemed, type ThemeValues } from '@/theme/ThemeProvider';
 
@@ -90,21 +90,33 @@ export default function IssueDetailScreen() {
   return (
     <KeyboardAvoidingView style={s.root} behavior="padding">
       <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+        {issue.image_url ? (
+          <Image source={{ uri: issue.image_url }} style={s.hero} />
+        ) : (
+          <View style={[s.hero, s.heroFallback, { backgroundColor: tint + '22' }]}>
+            {[220, 150, 90].map((d, i) => (
+              <View
+                key={d}
+                style={{
+                  position: 'absolute', width: d, height: d, borderRadius: d / 2, borderWidth: 2,
+                  borderColor: tint, opacity: 0.16 + i * 0.14,
+                }}
+              />
+            ))}
+            <Icon name={issue.category} size={60} color={tint} />
+          </View>
+        )}
+
         <View style={s.post}>
-          <View style={s.header}>
-            <View style={[s.avatar, { backgroundColor: tint }]}>
-              <Icon name={issue.category} size={26} color={white} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.category}>{CATEGORY_LABELS[issue.category]}</Text>
-              <Text style={s.when}>{timeAgo(issue.created_at) === 'now' ? 'Just now' : `${timeAgo(issue.created_at)} ago`}</Text>
-            </View>
-            <PriorityMeter priority={issue.priority} />
+          <View style={s.metaRow}>
+            <Icon name={issue.category} size={16} color={tint} />
+            <Text style={[s.category, { color: tint }]}>{CATEGORY_LABELS[issue.category]}</Text>
+            <Text style={s.when} numberOfLines={1}>{'·  '}{fmtDate(issue.created_at)}</Text>
+            <SeverityTriangle priority={issue.priority} size={15} withLabel />
           </View>
 
-          <Text style={s.text}>{issue.description}</Text>
-          {issue.image_url ? <Image source={{ uri: issue.image_url }} style={s.media} /> : null}
-          <Text style={s.date}>{fmtDate(issue.created_at)}</Text>
+          <Text style={s.title}>{displayTitle(issue.title, CATEGORY_LABELS[issue.category])}</Text>
+          <Text style={s.description}>{issue.description}</Text>
         </View>
 
         <View style={s.statsLine}>
@@ -178,17 +190,14 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     root: { flex: 1, backgroundColor: colors.bg },
     scroll: { flex: 1 },
     content: { paddingBottom: spacing.xl },
-    post: { paddingHorizontal: spacing.lg, paddingTop: spacing.md },
-    header: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginBottom: spacing.md },
-    avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-    category: { fontSize: 16, fontWeight: '800', color: colors.ink },
-    when: { fontSize: 14, color: colors.muted },
-    text: { fontSize: 18, lineHeight: 26, color: colors.ink },
-    media: {
-      width: '100%', height: 240, borderRadius: radius.lg, marginTop: spacing.md,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line,
-    },
-    date: { ...type.caption, fontSize: 14, marginTop: spacing.md, marginBottom: spacing.md },
+    hero: { width: '100%', height: 300 },
+    heroFallback: { alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+    post: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.lg },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    category: { fontSize: 14, fontWeight: '800' },
+    when: { flex: 1, fontSize: 14, color: colors.muted },
+    title: { ...type.display, fontSize: 27, lineHeight: 33, marginTop: spacing.sm },
+    description: { fontSize: 15, lineHeight: 22, color: colors.inkSoft, marginTop: spacing.sm },
     statsLine: {
       flexDirection: 'row', gap: spacing.xl, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
       borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.line,

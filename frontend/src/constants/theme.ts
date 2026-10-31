@@ -15,6 +15,10 @@ export interface Palette {
   warn: string;
   onAccent: string;
   overlay: string;
+  /** Priority triangle colours on posts: low, medium, high severity. */
+  severityLow: string;
+  severityMedium: string;
+  severityHigh: string;
 }
 
 /** Warm paper + ink + signal vermilion. */
@@ -33,6 +37,9 @@ export const lightPalette: Palette = {
   warn: '#D98E04',
   onAccent: '#FFFFFF',
   overlay: 'rgba(23, 32, 42, 0.5)',
+  severityLow: '#D4A72C',
+  severityMedium: '#EE7D1F',
+  severityHigh: '#D93025',
 };
 
 /** Night-shift blue-black with the same vermilion. */
@@ -51,6 +58,9 @@ export const darkPalette: Palette = {
   warn: '#F0B13A',
   onAccent: '#1B0F0A',
   overlay: 'rgba(0, 0, 0, 0.62)',
+  severityLow: '#F2C94C',
+  severityMedium: '#FF9440',
+  severityHigh: '#FF5A4E',
 };
 
 export const white = '#FFFFFF';
