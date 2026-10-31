@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "android": {
       "adaptiveIcon": {
@@ -26,7 +26,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "CitizenSignal needs access to your photos to attach evidence to a report."
+          "photosPermission": "CitizenSignal needs access to your photos to attach evidence to a report.",
+          "cameraPermission": "CitizenSignal needs the camera to photograph the issue you are reporting."
         }
       ]
     ],
