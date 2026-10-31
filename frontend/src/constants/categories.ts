@@ -21,17 +21,11 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 };
 
 export const CATEGORY_COLORS: Record<Category, string> = {
-  pothole: '#e53935',
-  streetlight: '#fb8c00',
-  garbage: '#43a047',
-  water_leak: '#1e88e5',
-  drainage: '#8e24aa',
-  road_damage: '#d81b60',
-  other: '#757575',
+  pothole: '#E4572E',
+  streetlight: '#E0A100',
+  garbage: '#3E9B4F',
+  water_leak: '#2B7FD4',
+  drainage: '#8B4FC0',
+  road_damage: '#D6336C',
+  other: '#6B7A8C',
 };
-
-export const STATUS_COLORS: Record<string, string> = {
-  open: '#e53935',
-  resolved: '#43a047',
-};
-

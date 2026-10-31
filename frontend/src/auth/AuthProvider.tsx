@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { USE_MOCK } from '../lib/env';
 
 interface AuthContextValue {
   session: Session | null;
@@ -13,11 +14,17 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function fakeSession(email: string): Session {
+  return { access_token: 'mock', user: { id: 'mock-user', email } } as unknown as Session;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!USE_MOCK);
 
   useEffect(() => {
+    if (USE_MOCK) return;
+
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
@@ -31,16 +38,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
+    if (USE_MOCK) {
+      setSession(fakeSession(email));
+      return { error: null };
+    }
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   };
 
   const signUp = async (email: string, password: string) => {
+    if (USE_MOCK) {
+      setSession(fakeSession(email));
+      return { error: null };
+    }
     const { error } = await supabase.auth.signUp({ email, password });
     return { error: error?.message ?? null };
   };
 
   const signOut = async () => {
+    if (USE_MOCK) {
+      setSession(null);
+      return;
+    }
     await supabase.auth.signOut();
   };
 
@@ -56,4 +75,3 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth must be used within AuthProvider');
   return ctx;
 }
-
