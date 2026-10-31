@@ -9,7 +9,7 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 
 - [ ] [ALL] Create repo, push `main`, add `backend/` and `frontend/` folders and the three .md files
 - [ ] [ALL] Create Supabase project
-- [ ] [ALL] Supabase Auth → Email provider → **"Confirm email" OFF**
+- [x] [ALL] ~~Supabase Auth → Email provider → **"Confirm email" OFF**~~ — N/A: project uses Google OAuth only (email provider disabled)
 - [x] [ALL] Run `backend/sql/schema.sql` (issues, evidence, upvotes + indexes)
 - [x] [ALL] Create **public** storage bucket `issue-images`
 - [ ] [ALL] Decide network route: LAN IP or tunnel; write the URL in the team chat
@@ -26,18 +26,18 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 ## Phase 1 — Core plumbing (12:15–13:30)
 
 **Backend**
-- [ ] [A] `config/env.ts` validates env with Zod; server refuses to boot on missing vars
+- [x] [A] `config/env.ts` validates env with Zod; server refuses to boot on missing vars
 - [x] [A] `middleware/error.ts` — one error shape
-- [ ] [A] `middleware/auth.ts` — `requireAuth` and `optionalAuth` verified with a real token
+- [x] [A] `middleware/auth.ts` — `requireAuth` and `optionalAuth` verified with a real token
 - [x] [A] `GET /api/issues?lat&lng&radius_m` returns seeded/dummy rows sorted by priority
 - [x] [A] `middleware/upload.ts` — Multer memory storage, 5 MB cap, image types only
 - [x] [A] Zod schema for report; bad lat/lng/short description → 400 with `details[]`
-- [ ] [A] `image.service` — Sharp rotate + resize + WebP → bucket → public URL
-- [ ] [A] `POST /api/issues` happy path creates an issue + image (no matching yet)
+- [x] [A] `image.service` — Sharp rotate + resize + WebP → bucket → public URL
+- [x] [A] `POST /api/issues` happy path creates an issue + image (no matching yet)
 
 **Frontend**
 - [ ] [B] `lib/supabase.ts` with AsyncStorage session persistence
-- [ ] [B] `AuthProvider` + login/signup screen (email + password) working against Supabase
+- [ ] [B] `AuthProvider` + "Sign in with Google" (Supabase OAuth, `roadmap.md` §1) — lands back in the app, not on localhost
 - [ ] [B] `api/client.ts` attaches Bearer token when logged in
 - [ ] [B] Map tab with markers (mock data)
 - [ ] [B] List tab with compact cards (mock data)
@@ -47,13 +47,13 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 
 **Backend**
 - [x] [A] `config/matching.ts` holds every threshold
-- [ ] [A] `matching.service` — same category → bbox prefilter → Geolib distance → string-similarity
-- [ ] [A] Outcome `merged` (text ≥ 0.75 and ≤ 25 m): evidence row added, `evidence_count` +1
-- [ ] [A] Outcome `reopened` (matched issue was resolved): status → open, `recurrence_count` +1, `reopened_at` set
+- [x] [A] `matching.service` — same category → bbox prefilter → Geolib distance → string-similarity
+- [x] [A] Outcome `merged` (text ≥ 0.75 and ≤ 25 m): evidence row added, `evidence_count` +1
+- [x] [A] Outcome `reopened` (matched issue was resolved): status → open, `recurrence_count` +1, `reopened_at` set
 - [x] [A] Outcome `needs_confirmation` (text 0.50–0.75, ≤ 50 m): returns up to 3 `candidates`, saves **nothing**
-- [ ] [A] `confirm_issue_id` and `force_new=true` paths work
+- [x] [A] `confirm_issue_id` and `force_new=true` paths work
 - [x] [A] `priority.service` — single formula, used by list + detail
-- [ ] [A] `POST/DELETE /api/issues/:id/upvote` — 401 without token, one vote per user, counter stays in sync
+- [x] [A] `POST/DELETE /api/issues/:id/upvote` — 401 without token, one vote per user, counter stays in sync
 
 **Frontend**
 - [ ] [B] Report form: category picker, description, photo (picker → manipulator), pin location on map (defaults to GPS)
@@ -61,7 +61,7 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 - [ ] [B] Submit button disabled while uploading; errors shown from `details[]`
 
 **Shared**
-- [ ] [ALL] Seed script: 1 resolved pothole + 3–4 nearby issues; `npm run seed` is repeatable
+- [x] [ALL] Seed script: 1 resolved pothole + 3–4 nearby issues; `npm run seed` is repeatable
 
 ## Phase 3 — Integration #1 (14:15–15:00)
 
@@ -71,14 +71,14 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 - [ ] [B] Upvote button: logged-out → `/login` → returns → upvote applied
 - [ ] [B] Upvote button shows `has_upvoted` state; list/map refresh after report and upvote
 - [ ] [B] Issue detail screen: photo, status badge, recurrence count, priority, days open
-- [ ] [A] `GET /api/issues/:id` includes evidence list
+- [x] [A] `GET /api/issues/:id` includes evidence list
 - [ ] [ALL] All four outcomes (`created`, `merged`, `reopened`, `needs_confirmation`) demonstrated on a phone
 
 ## Phase 4 — Hardening (15:00–15:30)
 
 - [x] [A] Oversized or non-image upload → clean 400, server stays up
 - [x] [A] Missing photo / missing GPS → clean 400
-- [ ] [A] Duplicate upvote doesn't 500
+- [x] [A] Duplicate upvote doesn't 500
 - [ ] [A] Tune priority weights so the seeded ordering looks sensible
 - [ ] [B] Loading / empty / error states on map, list, detail
 - [ ] [B] Works with location permission denied (manual pin)
@@ -91,7 +91,7 @@ Nothing new after this line. Fixes only.
 ## Phase 5 — Demo prep (15:30–16:30)
 
 - [ ] [ALL] Run the demo script in `roadmap.md` §9 end to end, **three times**
-- [ ] [A] `npm run seed` resets to a clean demo state in one command
+- [x] [A] `npm run seed` resets to a clean demo state in one command
 - [ ] [A] Server and tunnel will stay up (no sleeping laptop; screen-lock off)
 - [ ] [B] Demo account created and logged in on the demo phone, plus a logged-out path ready
 - [ ] [ALL] Backup: screen recording of a successful run, in case Wi-Fi fails
@@ -113,7 +113,7 @@ Nothing new after this line. Fixes only.
 |---|---|---|
 | Zod | Report body, list query, env validation | [x] |
 | Multer (≥ 2.0.2) | `middleware/upload.ts` receives `photo` | [x] |
-| Sharp | `image.service` — rotate, resize, WebP | [ ] |
+| Sharp | `image.service` — rotate, resize, WebP | [x] |
 | Geolib | `matching.service` — distance in metres | [x] |
 | string-similarity (4.0.4) | `matching.service` — description score | [x] |
 
@@ -130,4 +130,5 @@ Nothing new after this line. Fixes only.
 
 | Time | Who | Problem | Status |
 |---|---|---|---|
+| 14:37 | A | Smoke test harness signed in on the shared service-role client, so its setup writes hit RLS (harness bug, not server) | Fixed — separate client |
 | | | | |
