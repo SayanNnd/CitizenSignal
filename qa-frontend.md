@@ -113,3 +113,10 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Measured first: all five colours are under 4.5:1 as text (Dusty Mauve best at 3.3:1), so they can't carry text or the accent directly. Rejected: keeping Google's default map in light mode (its blues and greens clash with the blush UI).
 - **Why it's good:** Every text colour on the background clears 4.5:1 (ink 14.3, muted 5.2, accent 5.3, success 5.2, severity ≥ 4.5), and light and dark mode now both have a deliberate, matching map.
 - **Fallbacks / limits:** On the single highlighted Pastel Pink row, caption text drops to about 3.9:1. Category colours (pins, icons) are unchanged. Not yet checked on a phone screen.
+
+### README rewrite — 18:10
+- **Task:** Replace the Expo starter README with a real one for the project, no emojis, in a human tone.
+- **Decision:** `README.md` covers what the app does, how duplicate detection and priority work (numbers taken from `backend/src/config/matching.ts` and `priority.service.ts`), the stack, layout, setup for Supabase, server and app, mock mode, the API in brief, how to check changes, and an honest limitations list.
+- **Why:** Every command, env var and endpoint was checked against the repo and `roadmap.md` §4 rather than written from memory. Rejected: duplicating the full contract (it would drift from `roadmap.md`, so the README links to it).
+- **Why it's good:** A judge or new teammate can understand the idea in the first paragraph and run the project from the setup section alone.
+- **Fallbacks / limits:** `LICENSE` still contains the Expo template's MIT text (copyright 650 Industries); the README only points to it. Setup steps were not re-run from scratch on a clean machine.
