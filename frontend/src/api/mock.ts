@@ -69,7 +69,7 @@ const evidenceStore: Record<string, Evidence[]> = {
 };
 
 const c = (id: string, issue_id: string, author: string, body: string, days: number): Comment => ({
-  id, issue_id, author, body, created_at: new Date(Date.now() - days * DAY).toISOString(),
+  id, issue_id, author, body, created_at: new Date(Date.now() - days * DAY).toISOString(), is_mine: false,
 });
 
 const commentStore: Record<string, Comment[]> = {

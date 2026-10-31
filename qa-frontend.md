@@ -68,3 +68,13 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** A name-plus-avatar header is what made it feel like the category was the author; a headline matches what a civic report is. Severity uses the same 1–5 priority scale as before, collapsed to three colours, instead of a new formula.
 - **Why it's good:** Faster to scan; the most important words come first; the severity colours can be tuned in one file.
 - **Fallbacks / limits:** Headlines come from the first words of the description (backend-generated), so title and description can overlap. Severity thresholds (levels 1–2 low, 3 medium, 4–5 high) are guesses until real data is in. Not yet run on a phone.
+
+### [ALL] Contract change: comments + `comment_count`
+- `roadmap.md` §4 now defines `GET/POST /issues/:id/comments` (Comment: `id, issue_id, author, body, created_at, is_mine`), and every Issue has `comment_count`. Frontend types updated to match (both fields now required).
+
+### Coherence fixes: reopen visible again, comments live, root scaffold removed
+- **Task:** Fix the gaps found in a frontend/backend coherence audit.
+- **Decision:** (1) Reopen is visible again without bringing fixed issues back onto the map: a separate "It came back" alert after reporting (`app/report.tsx`), a "Came back after being fixed" / "Came back N times…" line on cards and the issue screen (`recurrenceLabel` in `src/lib/format.ts`), and a "Came back" timeline entry from `reopened_at`. (2) Comments now hit a real backend endpoint; `comment_count`/`is_mine` are required in `src/types`, and the mock sets `is_mine: false` on seeded comments. (3) The "use email" hint was removed from the Google sign-in error. (4) The `create-expo-app` template at the repo root (`package.json`, `app.json`, `src/`, `assets/`, `scripts/`) was deleted; `frontend/` is the only app. Also ran `npm install` (the `expo-auth-session` package was declared but not installed, so `tsc` failed).
+- **Why:** The reopen is the pitch's headline, but the earlier jargon cleanup made merge and reopen look identical. Showing fixed issues on the map again was the other option, rejected to keep the "open issues only" decision. The plain wording ("came back") keeps that cleanup's spirit.
+- **Why it's good:** Demo steps 2–3 (`roadmap.md` §9, updated) work again. `tsc --noEmit` is clean and the frontend lockfile is unchanged.
+- **Fallbacks / limits:** Not run on a phone. Search still filters loaded issues in the app instead of using the server's `q`; that was kept on purpose (instant results, also matches category names). `.env` still has `EXPO_PUBLIC_USE_MOCK=true`; flip it after the comments SQL has been run in Supabase.

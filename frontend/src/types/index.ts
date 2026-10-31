@@ -27,8 +27,7 @@ export interface Issue {
   resolved_at: string | null;
   reopened_at: string | null;
   has_upvoted: boolean;
-  /** Proposed contract addition (comments); absent until the backend returns it. */
-  comment_count?: number;
+  comment_count: number;
 }
 
 export type MyRole = 'reporter' | 'contributor';
@@ -48,14 +47,14 @@ export interface Evidence {
   created_at: string;
 }
 
-/** Proposed contract addition: GET/POST /api/issues/:id/comments. */
+/** GET/POST /api/issues/:id/comments item (roadmap §4). */
 export interface Comment {
   id: string;
   issue_id: string;
   author: string;
   body: string;
   created_at: string;
-  is_mine?: boolean;
+  is_mine: boolean;
 }
 
 export interface Candidate extends Issue {

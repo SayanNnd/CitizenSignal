@@ -11,13 +11,13 @@ import { CommentComposer, CommentList } from '@/components/Comments';
 import { Icon } from '@/components/Icon';
 import { SeverityTriangle } from '@/components/SeverityTriangle';
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/constants/categories';
-import { displayTitle, fmtDate } from '@/lib/format';
+import { displayTitle, fmtDate, recurrenceLabel } from '@/lib/format';
 import { radius, spacing, white } from '@/constants/theme';
 import { useThemed, type ThemeValues } from '@/theme/ThemeProvider';
 
 interface TimelineEvent {
   key: string;
-  kind: 'report' | 'fixed';
+  kind: 'report' | 'fixed' | 'reopened';
   label: string;
   date: string;
   text?: string;
@@ -55,7 +55,8 @@ export default function IssueDetailScreen() {
   const { issue, evidence } = data;
   const tint = CATEGORY_COLORS[issue.category];
   const busy = add.isPending || remove.isPending;
-  const commentCount = comments.data?.length ?? issue.comment_count ?? 0;
+  const commentCount = comments.data?.length ?? issue.comment_count;
+  const recurring = recurrenceLabel(issue.recurrence_count);
 
   function handleUpvote() {
     if (!user) { pendingUpvote.current = true; router.push('/login'); return; }
@@ -77,14 +78,16 @@ export default function IssueDetailScreen() {
     }
   }
 
-  // Every report (the first one plus each one merged in as evidence) and the fix date, oldest first.
-  // The API only keeps the most recent fix date, so earlier fixes of a recurring issue can't be listed.
+  // Every report (the first one plus each one merged in as evidence), the fix date and the date it
+  // came back, oldest first. The API only keeps the most recent fix and reopen dates, so earlier
+  // rounds of a recurring issue can't be listed.
   const events: TimelineEvent[] = [
     { key: 'created', kind: 'report' as const, label: 'Reported', date: issue.created_at },
     ...evidence.map((e) => ({
       key: e.id, kind: 'report' as const, label: 'Reported again', date: e.created_at, text: e.description, image: e.image_url,
     })),
     ...(issue.resolved_at ? [{ key: 'fixed', kind: 'fixed' as const, label: 'Fixed', date: issue.resolved_at }] : []),
+    ...(issue.reopened_at ? [{ key: 'reopened', kind: 'reopened' as const, label: 'Came back', date: issue.reopened_at }] : []),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
@@ -114,6 +117,13 @@ export default function IssueDetailScreen() {
             <Text style={s.when} numberOfLines={1}>{'·  '}{fmtDate(issue.created_at)}</Text>
             <SeverityTriangle priority={issue.priority} size={15} withLabel />
           </View>
+
+          {recurring ? (
+            <View style={s.recurring}>
+              <Icon name="alert" size={15} color={colors.accent} />
+              <Text style={s.recurringText}>{recurring}</Text>
+            </View>
+          ) : null}
 
           <Text style={s.title}>{displayTitle(issue.title, CATEGORY_LABELS[issue.category])}</Text>
           <Text style={s.description}>{issue.description}</Text>
@@ -148,7 +158,7 @@ export default function IssueDetailScreen() {
               <View key={e.key} style={s.eventRow}>
                 <View style={s.rail}>
                   <View style={[s.eventDot, { backgroundColor: fixed ? colors.success : colors.accent }]}>
-                    <Icon name={fixed ? 'check' : 'camera'} size={12} color={white} />
+                    <Icon name={fixed ? 'check' : e.kind === 'reopened' ? 'alert' : 'camera'} size={12} color={white} />
                   </View>
                   {!last && <View style={s.eventLine} />}
                 </View>
@@ -196,6 +206,8 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     category: { fontSize: 14, fontWeight: '800' },
     when: { flex: 1, fontSize: 14, color: colors.muted },
+    recurring: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.sm },
+    recurringText: { fontSize: 14, fontWeight: '800', color: colors.accent },
     title: { ...type.display, fontSize: 27, lineHeight: 33, marginTop: spacing.sm },
     description: { fontSize: 15, lineHeight: 22, color: colors.inkSoft, marginTop: spacing.sm },
     statsLine: {

@@ -92,11 +92,12 @@ export default function ReportScreen() {
           setCandidates(res.candidates ?? []);
           return;
         }
-        // merged and reopened read the same to users: their report joined an existing issue
-        const msg = res.outcome === 'created'
-          ? 'Your issue is posted.'
-          : 'Someone already reported this. Your report was added to it.';
-        Alert.alert('Thanks', msg);
+        const msg = {
+          created: 'Your issue is posted.',
+          merged: 'Someone already reported this. Your report was added to it.',
+          reopened: 'This was marked as fixed, but your report shows it came back. We reopened it so it gets attention again.',
+        }[res.outcome];
+        Alert.alert(res.outcome === 'reopened' ? 'It came back' : 'Thanks', msg);
         router.replace('/');
       },
       onError: (err: any) => {

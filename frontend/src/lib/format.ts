@@ -22,6 +22,12 @@ export function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
 }
 
+/** Plain-language note for an issue that came back after being fixed; null if it never has. */
+export function recurrenceLabel(count: number): string | null {
+  if (count <= 0) return null;
+  return count === 1 ? 'Came back after being fixed' : `Came back ${count} times after being fixed`;
+}
+
 export type Severity = 'low' | 'medium' | 'high';
 
 /** Same priority scale as the old meter: levels 1–2 low, 3 medium, 4–5 high. */
