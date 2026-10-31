@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { isAdminEmail } from '../config/admin.js';
+import { HttpError } from '../lib/http-error.js';
 import { LoginBodySchema } from '../schemas/auth.schema.js';
 import { signInOrRegister } from '../services/auth.service.js';
 
@@ -10,5 +12,12 @@ export async function login(req: Request, res: Response) {
     access_token: session.access_token,
     refresh_token: session.refresh_token,
     created,
+    is_admin: isAdminEmail(session.user.email),
   });
+}
+
+/** Who the token belongs to. The app calls this on start, since a restored session skips login. */
+export async function me(req: Request, res: Response) {
+  if (!req.user) throw HttpError.unauthorized();
+  res.json({ id: req.user.id, email: req.user.email ?? null, is_admin: req.user.is_admin });
 }

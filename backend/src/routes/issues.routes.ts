@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { upload } from '../middleware/upload.js';
-import { requireAuth, optionalAuth } from '../middleware/auth.js';
+import { requireAuth, requireAdmin, optionalAuth } from '../middleware/auth.js';
 import {
   listIssues,
   listMyIssues,
@@ -10,6 +10,7 @@ import {
   unvoteIssue,
   listComments,
   createComment,
+  updateIssueStatus,
 } from '../controllers/issues.controller.js';
 
 export const issuesRouter = Router();
@@ -21,5 +22,6 @@ issuesRouter.get('/:id', optionalAuth, getIssue);
 issuesRouter.post('/', optionalAuth, upload.single('photo'), createIssue);
 issuesRouter.post('/:id/upvote', requireAuth, upvoteIssue);
 issuesRouter.delete('/:id/upvote', requireAuth, unvoteIssue);
+issuesRouter.patch('/:id/status', requireAuth, requireAdmin, updateIssueStatus);
 issuesRouter.get('/:id/comments', optionalAuth, listComments);
 issuesRouter.post('/:id/comments', requireAuth, createComment);

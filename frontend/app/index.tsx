@@ -25,7 +25,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, isDark, s } = useThemed(makeStyles);
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const loc = useLocationContext();
   const { center, ready, radius: radiusM, focusedIssueId, setFocusedIssueId } = loc;
 
@@ -117,6 +117,7 @@ export default function HomeScreen() {
 
   const menuItems: MenuItem[] = [
     { key: 'mine', icon: 'list', label: 'Your Issues', onPress: () => requireLogin(() => router.push('/my-issues')) },
+    ...(isAdmin ? [{ key: 'admin', icon: 'shield', label: 'Manage Issues', onPress: () => router.push('/admin') } as MenuItem] : []),
     { key: 'settings', icon: 'sliders', label: 'Settings', onPress: () => router.push('/settings') },
     { key: 'help', icon: 'help', label: 'Help', onPress: () => router.push('/help') },
     user
@@ -240,7 +241,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      <MenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} email={user?.email} />
+      <MenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} items={menuItems} email={user?.email} badge={isAdmin ? 'ADMIN' : undefined} />
     </View>
   );
 }

@@ -15,10 +15,12 @@ interface Props {
   distanceLabel?: string;
   /** Small line above the post, e.g. "You reported this" in Your Issues. */
   badge?: string;
+  /** Extra controls under the counts, e.g. the admin close / reopen button. */
+  footer?: React.ReactNode;
 }
 
 /** Full-width feed row (X-style layout): category line, headline, short description, photo, counts. */
-export function IssueCard({ issue, onPress, highlighted, distanceLabel, badge }: Props) {
+export function IssueCard({ issue, onPress, highlighted, distanceLabel, badge, footer }: Props) {
   const { colors, s } = useThemed(makeStyles);
   const tint = CATEGORY_COLORS[issue.category];
   const label = CATEGORY_LABELS[issue.category];
@@ -58,6 +60,8 @@ export function IssueCard({ issue, onPress, highlighted, distanceLabel, badge }:
         <Stat icon="arrow-up" value={issue.upvotes} active={issue.has_upvoted} />
         <Stat icon="camera" value={issue.evidence_count} />
       </View>
+
+      {footer}
     </TouchableOpacity>
   );
 }

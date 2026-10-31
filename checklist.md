@@ -85,6 +85,14 @@ Clock times assume an 11:45 start; keep the order if yours differs.
 - [ ] [B] Works with location permission denied (manual pin)
 - [ ] [B] Works after app restart (session persists)
 
+## Admin (close / reopen issues)
+
+- [x] [A] `ADMIN_EMAILS` env; `GET /api/auth/me` and `POST /auth/login` return `is_admin` (verified live: listed email → true, other → false)
+- [x] [A] `PATCH /api/issues/:id/status` — 401 without token, 403 `FORBIDDEN` for non-admins, close/reopen/idempotent/404 (12 smoke checks pass)
+- [ ] [ALL] Log in once as `admin@gmail.com` on the real backend to claim the account (first login sets its password)
+- [x] [B] Bundle builds and `tsc` passes with the "Manage Issues" screen, menu item and detail-screen toggle
+- [ ] [B] Admin flow checked on a phone: menu item appears only for the admin, Open/Fixed/All tabs, close + reopen update map and feed
+
 ## 🚫 15:30 — FEATURE FREEZE
 
 Nothing new after this line. Fixes only.

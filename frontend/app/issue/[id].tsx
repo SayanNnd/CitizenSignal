@@ -4,10 +4,11 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAddComment, useComments, useIssue, useUpvote } from '@/hooks/useIssues';
+import { useAddComment, useComments, useIssue, useSetIssueStatus, useUpvote } from '@/hooks/useIssues';
 import { useAuth } from '@/auth/AuthProvider';
 import { ErrorState, LoadingState } from '@/components/StateViews';
 import { CommentComposer, CommentList } from '@/components/Comments';
+import { AdminStatusButton } from '@/components/AdminStatusButton';
 import { Icon } from '@/components/Icon';
 import { SeverityTriangle } from '@/components/SeverityTriangle';
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '@/constants/categories';
@@ -29,7 +30,8 @@ export default function IssueDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { colors, s } = useThemed(makeStyles);
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const setStatus = useSetIssueStatus();
   const scrollRef = useRef<ScrollViewInstance>(null);
 
   const { data, isLoading, isError, refetch } = useIssue(id);
@@ -65,6 +67,13 @@ export default function IssueDetailScreen() {
     } else {
       add.mutate(id, { onError: () => Alert.alert('Error', 'Could not upvote.') });
     }
+  }
+
+  function toggleStatus() {
+    setStatus.mutate(
+      { id, status: issue.status === 'resolved' ? 'open' : 'resolved' },
+      { onError: (e) => Alert.alert('Error', e.message || 'Could not update the issue.') },
+    );
   }
 
   async function postComment(body: string) {
@@ -147,6 +156,7 @@ export default function IssueDetailScreen() {
               {issue.has_upvoted ? 'Upvoted' : user ? 'Upvote' : 'Log in to upvote'}
             </Text>
           </TouchableOpacity>
+          {isAdmin && <AdminStatusButton status={issue.status} pending={setStatus.isPending} onPress={toggleStatus} />}
         </View>
 
         <Text style={s.label}>Timeline</Text>

@@ -75,6 +75,14 @@ export interface LoginResponse {
   access_token: string;
   refresh_token: string;
   created: boolean;
+  is_admin: boolean;
+}
+
+/** `GET /api/auth/me`: who the token belongs to. Admins are the emails in the server's ADMIN_EMAILS. */
+export interface Me {
+  id: string;
+  email: string | null;
+  is_admin: boolean;
 }
 
 export interface ApiError {

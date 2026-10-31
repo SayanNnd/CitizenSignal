@@ -4,6 +4,7 @@
  *   npm run dev                                   # in another terminal
  *   npm run smoke                                 # defaults to http://localhost:4000/api
  *   SMOKE_API_URL=http://<host>:4000/api npm run smoke
+ *   SMOKE_ADMIN_EMAIL=<an email in the server's ADMIN_EMAILS> npm run smoke   # + admin close/reopen
  *
  * Works in a random empty spot of the South Pacific so it never touches demo data, uses a
  * throwaway auth user, and deletes everything it created (rows, photos, user) at the end.
@@ -125,11 +126,8 @@ async function newestPhoto(): Promise<string | undefined> {
   return data?.[0]?.name;
 }
 
-async function createTestUser(): Promise<{ id: string; token: string }> {
-  const email = `smoke-${Date.now()}@citizensignal.test`;
-  const { data, error } = await supabase.auth.admin.createUser({ email, email_confirm: true });
-  if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
-  // An admin magic link works whatever login providers are enabled.
+/** Signs in as an existing user. An admin magic link works whatever login providers are enabled. */
+async function signInAs(email: string): Promise<string> {
   const { data: link, error: linkError } = await supabase.auth.admin.generateLink({ type: 'magiclink', email });
   if (linkError) throw new Error(`generateLink failed: ${linkError.message}`);
   // Sign in on a separate client: verifyOtp stores the session on the client it runs on, which
@@ -142,10 +140,30 @@ async function createTestUser(): Promise<{ id: string; token: string }> {
     type: 'magiclink',
   });
   if (otpError || !session.session) throw new Error(`verifyOtp failed: ${otpError?.message}`);
-  return { id: data.user.id, token: session.session.access_token };
+  return session.session.access_token;
 }
 
-async function cleanup(userId?: string) {
+async function createTestUser(): Promise<{ id: string; token: string }> {
+  const email = `smoke-${Date.now()}@citizensignal.test`;
+  const { data, error } = await supabase.auth.admin.createUser({ email, email_confirm: true });
+  if (error || !data.user) throw new Error(`createUser failed: ${error?.message}`);
+  return { id: data.user.id, token: await signInAs(email) };
+}
+
+/** Users this run created, deleted by `cleanup`. An admin account that already existed is kept. */
+const createdUserIds: string[] = [];
+
+/** Token for `SMOKE_ADMIN_EMAIL`, creating that account first if it doesn't exist yet. */
+async function adminToken(email: string): Promise<string> {
+  const { data, error } = await supabase.auth.admin.createUser({ email, email_confirm: true });
+  if (data.user) createdUserIds.push(data.user.id);
+  else if (error?.code !== 'email_exists' && error?.code !== 'user_already_exists') {
+    throw new Error(`createUser (admin) failed: ${error?.message}`);
+  }
+  return signInAs(email);
+}
+
+async function cleanup() {
   const box = boundingBox(ORIGIN.lat, ORIGIN.lng, 500);
   const { data: issues } = await supabase
     .from('issues')
@@ -163,8 +181,8 @@ async function cleanup(userId?: string) {
 
   if (rows.length) await supabase.from('issues').delete().in('id', rows.map((r) => r.id)); // cascades
   if (paths.length) await supabase.storage.from(IMAGE_BUCKET).remove(paths);
-  if (userId) await supabase.auth.admin.deleteUser(userId);
-  console.log(`\n🧹  Cleaned up ${rows.length} issues, ${paths.length} photos${userId ? ', test user' : ''}`);
+  for (const id of createdUserIds) await supabase.auth.admin.deleteUser(id);
+  console.log(`\n🧹  Cleaned up ${rows.length} issues, ${paths.length} photos, ${createdUserIds.length} test user(s)`);
 }
 
 // ── the tests ────────────────────────────────────────────────────────────────
@@ -291,6 +309,39 @@ async function run(user: { id: string; token: string }) {
   check("merged into someone else's → contributor", role(anon.body.issue.id) === 'contributor', role(anon.body.issue.id));
   check('logged-out issue not listed as mine otherwise', role(badToken.body.issue.id) === undefined);
   check('newest own activity first', mine.body.issues?.[0]?.id === anon.body.issue.id, mine.body.issues?.map((i: Json) => i.id));
+
+  section('Admin: close / reopen (PATCH /issues/:id/status)');
+  const meUser = await call('GET', '/auth/me', token);
+  check('/auth/me → is_admin false for a normal user', meUser.status === 200 && meUser.body.is_admin === false && meUser.body.id === user.id, meUser);
+  check('/auth/me without token → 401', (await call('GET', '/auth/me')).status === 401);
+  const noAuthStatus = await call('PATCH', `/issues/${p1.id}/status`, undefined, { status: 'resolved' });
+  check('401 without token', noAuthStatus.status === 401 && noAuthStatus.body.error?.code === 'UNAUTHORIZED', noAuthStatus);
+  const notAdmin = await call('PATCH', `/issues/${p1.id}/status`, token, { status: 'resolved' });
+  check('403 FORBIDDEN for a non-admin', notAdmin.status === 403 && notAdmin.body.error?.code === 'FORBIDDEN', notAdmin);
+
+  const adminEmail = process.env.SMOKE_ADMIN_EMAIL?.trim().toLowerCase();
+  if (!adminEmail) {
+    console.log("  – success path skipped: set SMOKE_ADMIN_EMAIL to an email in the server's ADMIN_EMAILS");
+    return;
+  }
+  const admin = await adminToken(adminEmail);
+  const meAdmin = await call('GET', '/auth/me', admin);
+  check('/auth/me → is_admin true for an ADMIN_EMAILS account', meAdmin.body.is_admin === true, meAdmin.body);
+  const badStatus = await call('PATCH', `/issues/${p1.id}/status`, admin, { status: 'closed' });
+  check('unknown status → 400 on status', badStatus.status === 400 && badStatus.body.error?.details?.[0]?.field === 'status', badStatus);
+  const recurrence = (await call('GET', `/issues/${p1.id}`)).body.issue.recurrence_count;
+  const closed = await call('PATCH', `/issues/${p1.id}/status`, admin, { status: 'resolved' });
+  check('close → resolved, resolved_at set, days_open 0', closed.status === 200 && closed.body.issue?.status === 'resolved' && !!closed.body.issue?.resolved_at && closed.body.issue?.days_open === 0, closed.body);
+  const area = `/issues?lat=${ORIGIN.lat}&lng=${ORIGIN.lng}&radius_m=300`;
+  check('closed issue listed without a status filter', !!(await call('GET', area)).body.issues?.find((i: Json) => i.id === p1.id));
+  check('closed issue hidden from status=open', !(await call('GET', `${area}&status=open`)).body.issues?.find((i: Json) => i.id === p1.id));
+  const closedAgain = await call('PATCH', `/issues/${p1.id}/status`, admin, { status: 'resolved' });
+  check('closing again → 200, resolved_at unchanged', closedAgain.status === 200 && closedAgain.body.issue?.resolved_at === closed.body.issue?.resolved_at, closedAgain.body);
+  const opened = await call('PATCH', `/issues/${p1.id}/status`, admin, { status: 'open' });
+  const o = opened.body.issue;
+  check('reopen → open, resolved_at cleared, recurrence unchanged', o?.status === 'open' && o?.resolved_at === null && o?.recurrence_count === recurrence, o);
+  const missingStatus = await call('PATCH', '/issues/6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b/status', admin, { status: 'open' });
+  check('unknown issue → 404', missingStatus.status === 404, missingStatus.status);
 }
 
 async function main() {
@@ -304,12 +355,12 @@ async function main() {
     .withMetadata({ orientation: 6 })
     .toBuffer();
 
-  let user: { id: string; token: string } | undefined;
   try {
-    user = await createTestUser();
+    const user = await createTestUser();
+    createdUserIds.push(user.id);
     await run(user);
   } finally {
-    await cleanup(user?.id);
+    await cleanup();
   }
   console.log(failures ? `\n❌  ${failures} check(s) failed` : '\n✅  All checks passed');
   process.exit(failures ? 1 : 0);

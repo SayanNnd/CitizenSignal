@@ -15,7 +15,7 @@ Time box: ~5 hours. Assumed start 11:45 → end 16:45. **Feature freeze 15:30.**
 | Auth | **Supabase Auth, email + password** (changed back from Google sign-in). One form: `POST /api/auth/login` signs in, or creates the account first if the email is new. The server creates accounts already confirmed (`auth.admin.createUser({ email_confirm: true })`), so no confirmation email or OTP is ever sent. Dashboard: Authentication → Sign In / Providers → **Email enabled**. No Google, no magic links. |
 | What needs login | **Upvoting requires login.** Browsing the map/list is public. Reporting uses *optional* auth (user id attached if logged in). To make reporting login-only later, swap `optionalAuth` → `requireAuth` on one route. |
 | Token flow | App gets `{ access_token, refresh_token }` from `POST /api/auth/login`, stores them with `supabase.auth.setSession` (so `@supabase/supabase-js` refreshes them) → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
-| Admin | None. Mark issues resolved in **Supabase Studio** (set `status='resolved'`, `resolved_at=now()`). |
+| Admin | A fixed list of emails in the server's `ADMIN_EMAILS` (e.g. `admin@gmail.com`). Admins log in through the same form; the server decides the role from the verified email, never the request. The app shows them a **Manage Issues** screen (hamburger menu): every issue in the selected area, open and fixed, with close / reopen buttons. No roles table, no invites. |
 | Mandatory packages | **Zod, Multer, Sharp, Geolib, string-similarity** — all five used on the server, versions below. |
 
 ### Mandatory package versions (backend)
@@ -128,6 +128,7 @@ Android + Expo Go: `react-native-maps` works out of the box (no Google Maps key 
 | `SUPABASE_URL` | `EXPO_PUBLIC_SUPABASE_URL` |
 | `SUPABASE_SERVICE_ROLE_KEY` (**server only, never in the app**) | `EXPO_PUBLIC_SUPABASE_ANON_KEY` |
 | `CORS_ORIGIN=*` | `EXPO_PUBLIC_USE_MOCK=true/false` |
+| `ADMIN_EMAILS=admin@gmail.com` (comma-separated) | — (with mock auth, any `admin@…` email is an admin) |
 
 Phones cannot reach `localhost`. Use the laptop's LAN IP (same Wi-Fi) or a tunnel (Cloudflare Tunnel / ngrok). Decide in the first 30 minutes.
 
@@ -136,7 +137,7 @@ Phones cannot reach `localhost`. Use the laptop's LAN IP (same Wi-Fi) or a tunne
 ## 4. API contract (source of truth for both tracks)
 
 Base: `/api`. JSON everywhere except the report endpoint (multipart). Errors always look like:
-`{ "error": { "code": "VALIDATION_ERROR" | "UNAUTHORIZED" | "NOT_FOUND" | "SERVER_ERROR", "message": "...", "details": [{ "field": "...", "message": "..." }] } }`
+`{ "error": { "code": "VALIDATION_ERROR" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "SERVER_ERROR", "message": "...", "details": [{ "field": "...", "message": "..." }] } }`
 
 Categories: `pothole`, `streetlight`, `garbage`, `water_leak`, `drainage`, `road_damage`, `other`.
 Statuses: `open`, `resolved`.
@@ -144,17 +145,19 @@ Statuses: `open`, `resolved`.
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
 | GET | `/health` | none | Liveness check |
-| POST | `/auth/login` | none | JSON `{ email, password }` (password 6–72 chars) → `{ access_token, refresh_token, created }`: **200** signed in, **201** account created and signed in. Wrong password for an existing email → 401. |
+| POST | `/auth/login` | none | JSON `{ email, password }` (password 6–72 chars) → `{ access_token, refresh_token, created, is_admin }`: **200** signed in, **201** account created and signed in. Wrong password for an existing email → 401. |
+| GET | `/auth/me` | **required** | `{ id, email, is_admin }`. The app calls it on start, because a restored session never goes through login. |
 | GET | `/issues?lat&lng&radius_m=2000` | optional | Nearby issues, sorted by priority. Includes `has_upvoted` if token present. Optional filters below. |
 | GET | `/issues/mine` | **required** | `{ issues: MyIssue[] }` — issues the caller reported **or** contributed evidence to, newest own activity first (max 100). |
 | GET | `/issues/:id` | optional | Issue + evidence list |
 | POST | `/issues` | optional | Report (multipart). Runs the matching pipeline. |
 | POST | `/issues/:id/upvote` | **required** | Add upvote (one per user per issue) |
 | DELETE | `/issues/:id/upvote` | **required** | Remove upvote |
+| PATCH | `/issues/:id/status` | **admin** | JSON `{ status: "resolved" \| "open" }` → `{ issue }`. `resolved` sets `resolved_at=now()`; `open` clears `resolved_at` and leaves `recurrence_count` alone (an admin undo, not a recurrence). Same status again → 200, unchanged. No token → 401, non-admin → **403 `FORBIDDEN`**. |
 | GET | `/issues/:id/comments` | optional | `{ comments: Comment[] }`, oldest first (max 200). `is_mine` is true for the caller's own comments. |
 | POST | `/issues/:id/comments` | **required** | JSON `{ body }` (1–500 chars after trim) → **201** `{ comment }`. Author comes from the token, never the body. |
 
-**`GET /issues` query:** `lat`, `lng` (required); `radius_m` (default 2000, max 20000); optional `q` (≤ 100 chars; every word must appear in title or description, case-insensitive, punctuation ignored), `category`, `status`. Invalid values → 400 `VALIDATION_ERROR`.
+**`GET /issues` query:** `lat`, `lng` (required); `radius_m` (default 2000, max 20000); optional `q` (≤ 100 chars; every word must appear in title or description, case-insensitive, punctuation ignored), `category`, `status`. Invalid values → 400 `VALIDATION_ERROR`. Without `status` it returns open **and** resolved issues — the admin screen uses that; the map and feed send `status=open`.
 
 **Issue object** (list + detail):
 `id, category, title, description, latitude, longitude, status, image_url, upvotes, evidence_count, recurrence_count, comment_count, priority, days_open, created_at, resolved_at, reopened_at, has_upvoted`

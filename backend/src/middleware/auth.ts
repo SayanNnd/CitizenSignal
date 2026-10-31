@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from 'express';
 import { supabase } from '../config/supabase.js';
+import { isAdminEmail } from '../config/admin.js';
 import { HttpError } from '../lib/http-error.js';
 import type { AuthUser } from '../types/index.js';
 
@@ -28,7 +29,12 @@ function displayName(metadata: Record<string, unknown> | undefined, email: strin
 async function verifyToken(token: string): Promise<AuthUser | null> {
   const { data, error } = await supabase.auth.getUser(token);
   if (error || !data.user) return null;
-  return { id: data.user.id, email: data.user.email, name: displayName(data.user.user_metadata, data.user.email) };
+  return {
+    id: data.user.id,
+    email: data.user.email,
+    name: displayName(data.user.user_metadata, data.user.email),
+    is_admin: isAdminEmail(data.user.email),
+  };
 }
 
 /** Rejects the request with 401 unless it carries a valid Bearer token. */
@@ -40,6 +46,13 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
   if (!user) return next(HttpError.unauthorized('Session is invalid or expired, log in again'));
 
   req.user = user;
+  next();
+}
+
+/** Rejects with 403 unless the caller is an admin. Must run after `requireAuth`. */
+export function requireAdmin(req: Request, _res: Response, next: NextFunction) {
+  if (!req.user) return next(HttpError.unauthorized('Log in to do this'));
+  if (!req.user.is_admin) return next(HttpError.forbidden('Only admins can do this'));
   next();
 }
 

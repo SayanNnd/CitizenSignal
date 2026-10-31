@@ -1,6 +1,12 @@
 import { Request, Response } from 'express';
 import { HttpError } from '../lib/http-error.js';
-import { ListQuerySchema, ReportBodySchema, IssueIdSchema, CommentBodySchema } from '../schemas/issue.schema.js';
+import {
+  ListQuerySchema,
+  ReportBodySchema,
+  IssueIdSchema,
+  CommentBodySchema,
+  StatusBodySchema,
+} from '../schemas/issue.schema.js';
 import {
   getNearbyIssues,
   getMyIssues,
@@ -10,6 +16,7 @@ import {
   removeUpvote,
   getComments,
   addComment,
+  setIssueStatus,
 } from '../services/issues.service.js';
 import type { AuthUser } from '../types/index.js';
 
@@ -57,6 +64,12 @@ export async function upvoteIssue(req: Request, res: Response) {
 export async function unvoteIssue(req: Request, res: Response) {
   const { id } = IssueIdSchema.parse(req.params);
   res.json({ issue: await removeUpvote(id, requireUserId(req)) });
+}
+
+export async function updateIssueStatus(req: Request, res: Response) {
+  const { id } = IssueIdSchema.parse(req.params);
+  const { status } = StatusBodySchema.parse(req.body ?? {});
+  res.json({ issue: await setIssueStatus(id, status, requireUserId(req)) });
 }
 
 export async function listComments(req: Request, res: Response) {

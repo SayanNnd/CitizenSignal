@@ -86,7 +86,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 
 ## Out of scope — do not build
 
-Roles/admin portal, social login (Google etc.), email verification or OTP, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
+Roles, invites or an admin portal beyond the one "Manage Issues" screen for `ADMIN_EMAILS` accounts (`roadmap.md` §1), social login (Google etc.), email verification or OTP, push notifications, AI image analysis, chat, payments, heatmaps, analytics, iOS support, extra npm packages beyond the roadmap unless the team agrees. If an idea isn't in `roadmap.md`, put it in README under "Future work".
 
 ## Decision log — `qa-backend.md` / `qa-frontend.md` (required on every task)
 

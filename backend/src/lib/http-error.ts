@@ -1,7 +1,7 @@
 // One error type for everything the API reports on purpose.
 // `middleware/error.ts` turns it into the contract's error shape (roadmap.md §4).
 
-export type ErrorCode = 'VALIDATION_ERROR' | 'UNAUTHORIZED' | 'NOT_FOUND' | 'SERVER_ERROR';
+export type ErrorCode = 'VALIDATION_ERROR' | 'UNAUTHORIZED' | 'FORBIDDEN' | 'NOT_FOUND' | 'SERVER_ERROR';
 
 export interface ErrorDetail {
   field: string;
@@ -25,6 +25,10 @@ export class HttpError extends Error {
 
   static unauthorized(message = 'Authentication required') {
     return new HttpError(401, 'UNAUTHORIZED', message);
+  }
+
+  static forbidden(message = 'You are not allowed to do this') {
+    return new HttpError(403, 'FORBIDDEN', message);
   }
 
   static notFound(message = 'Not found') {

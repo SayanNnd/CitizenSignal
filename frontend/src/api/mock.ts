@@ -159,6 +159,23 @@ export async function mockSetUpvote(id: string, value: boolean): Promise<{ issue
   return { issue: hydrate(s) };
 }
 
+/** With mock auth, any email starting with "admin@" logs in as an admin. */
+export function isMockAdmin(email: string | null | undefined): boolean {
+  return !!email && email.toLowerCase().startsWith('admin@');
+}
+
+/** Same rules as the server: closing sets `resolved_at`; reopening clears it and leaves `recurrence_count`. */
+export async function mockSetStatus(id: string, status: Status): Promise<{ issue: Issue }> {
+  await wait(200);
+  const s = store.find((i) => i.id === id);
+  if (!s) throw new Error('Not found');
+  if (s.status !== status) {
+    s.status = status;
+    s.resolved_at = status === 'resolved' ? new Date().toISOString() : null;
+  }
+  return { issue: hydrate(s) };
+}
+
 function titleFor(category: Category, description: string) {
   const label = category.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   const words = description.trim().split(/\s+/);

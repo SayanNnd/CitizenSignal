@@ -114,6 +114,13 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why it's good:** Every text colour on the background clears 4.5:1 (ink 14.3, muted 5.2, accent 5.3, success 5.2, severity ≥ 4.5), and light and dark mode now both have a deliberate, matching map.
 - **Fallbacks / limits:** On the single highlighted Pastel Pink row, caption text drops to about 3.9:1. Category colours (pins, icons) are unchanged. Not yet checked on a phone screen.
 
+### README rewrite — 18:10
+- **Task:** Replace the Expo starter README with a real one for the project, no emojis, in a human tone.
+- **Decision:** `README.md` covers what the app does, how duplicate detection and priority work (numbers taken from `backend/src/config/matching.ts` and `priority.service.ts`), the stack, layout, setup for Supabase, server and app, mock mode, the API in brief, how to check changes, and an honest limitations list.
+- **Why:** Every command, env var and endpoint was checked against the repo and `roadmap.md` §4 rather than written from memory. Rejected: duplicating the full contract (it would drift from `roadmap.md`, so the README links to it).
+- **Why it's good:** A judge or new teammate can understand the idea in the first paragraph and run the project from the setup section alone.
+- **Fallbacks / limits:** `LICENSE` still contains the Expo template's MIT text (copyright 650 Industries); the README only points to it. Setup steps were not re-run from scratch on a clean machine.
+
 - **[ALL] 2026-10-31 (from Track A):** Contract §4 — added `POST /api/auth/login` `{ email, password }` → `{ access_token, refresh_token, created }` (200 signed in / 201 registered / 401 wrong password). Google sign-in removed.
 
 ### Email + password login replaces Google — 2026-10-31
@@ -129,3 +136,16 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** In SDK 58 the global `fetch` is `expo/fetch`, whose multipart encoder only accepts strings and Blobs, not React Native's `{ uri, name, type }` file part, so every photo upload threw. React Native's XHR still streams a local file from its `uri`. Rejected: `EXPO_PUBLIC_USE_RN_FETCH=1`, the documented opt-out, because it only works if every teammate's `.env` has it, and a missing line silently brings the bug back.
 - **Why it's good:** A fix in code, with no config to forget. Verified on two Android phones in Expo Go through the app's real `reportIssue`: the same shrink-to-local-file path the report screen uses created an issue with its photo (test rows and photos deleted afterwards). Error shape and handling on the report screen are unchanged.
 - **Fallbacks / limits:** Phones that were open before the change kept running old code until reloaded; this caused a confusing second failure during testing. Upload timeout is 60 s. `manipulateAsync` is deprecated in SDK 58 but still works.
+
+### Merge of origin/main (README) — 2026-10-31
+- **Task:** Resolve the `qa-frontend.md` conflict when merging `origin/main` into local `main`.
+- **Decision:** Kept every entry once, in order: README rewrite (from origin), the `[ALL]` login note, email + password login, photo upload fix (local). Origin's copy also contained conflict markers committed by an earlier merge; those were removed. No other file had markers.
+
+- **[ALL] 2026-10-31 (from Track A):** Contract §4 — `POST /auth/login` returns `is_admin`; new `GET /api/auth/me` → `{ id, email, is_admin }`; new admin-only `PATCH /api/issues/:id/status` `{ status }` → `{ issue }` (403 `FORBIDDEN` for non-admins). New error code `FORBIDDEN`.
+
+### Admin "Manage Issues" screen — 2026-10-31
+- **Task:** Admins (emails in the server's `ADMIN_EMAILS`, e.g. `admin@gmail.com`) get a hamburger-menu option to see all issues around the selected area, open and fixed, and close or reopen them.
+- **Decision:** `AuthProvider` exposes `isAdmin` from `GET /api/auth/me` (TanStack query keyed by user id). The menu shows **Manage Issues** (new `shield` icon) and an `ADMIN` tag in the drawer header only for admins. `app/admin.tsx` lists `useAreaIssues` (same center + radius as the map, no status filter) with Open / Fixed / All tabs and counts, reusing `IssueCard` (new optional `footer` slot) and the settings segmented-control style. `AdminStatusButton` ("Mark as fixed" / "Reopen issue") sits on each card and on the issue detail screen; `useSetIssueStatus` invalidates the map, feed, admin list and the issue detail. Mock mode: `setIssueStatus` has a mock, and with mock auth any `admin@…` email is an admin.
+- **Why:** Rejected deciding admin in the app (a hard-coded email list in the bundle): anyone could read it, and the server has to check anyway. Asking `/auth/me` covers a restored session, which never goes through the login call. Rejected a separate admin card component: the existing card plus a footer keeps the look identical to the feed.
+- **Why it's good:** Login flow unchanged; no new packages; all four states handled (loading, error with 401 → log in, empty per tab, list). Closing an issue on the Open tab makes it drop off the list and the map at once, which reads clearly in a demo.
+- **Fallbacks / limits:** `tsc` passes and the Android bundle builds (`expo export`), but it is **not yet checked on a phone**. While `/auth/me` is loading after a cold start the menu item is briefly hidden. One status change at a time shows a spinner; tapping two rows quickly only spins the latest. No confirmation dialog — a wrong tap is undone with the opposite button.

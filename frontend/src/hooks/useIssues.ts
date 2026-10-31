@@ -1,5 +1,8 @@
 import { keepPreviousData, useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { listIssues, getIssue, reportIssue, addUpvote, removeUpvote, listMyIssues, listComments, addComment } from '../api/issues';
+import {
+  listIssues, getIssue, reportIssue, addUpvote, removeUpvote, listMyIssues, listComments, addComment, setIssueStatus,
+} from '../api/issues';
+import type { Status } from '../types';
 
 const ISSUES_KEY = 'issues';
 
@@ -15,6 +18,28 @@ export function useIssues(lat: number | null, lng: number | null, radius_m?: num
     enabled: lat !== null && lng !== null,
     placeholderData: keepPreviousData,
     select: (data) => data.issues,
+  });
+}
+
+/** Every issue in the area, open and fixed, for the admin screen. */
+export function useAreaIssues(lat: number | null, lng: number | null, radius_m?: number) {
+  return useQuery({
+    queryKey: [ISSUES_KEY, lat, lng, radius_m, 'all'],
+    queryFn: () => listIssues({ lat: lat!, lng: lng!, radius_m }),
+    enabled: lat !== null && lng !== null,
+    select: (data) => data.issues,
+  });
+}
+
+/** Admin close / reopen. Refreshes the map, feed and admin lists plus the issue's detail. */
+export function useSetIssueStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: Status }) => setIssueStatus(id, status),
+    onSuccess: (_, { id }) => {
+      queryClient.invalidateQueries({ queryKey: [ISSUES_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['issue', id] });
+    },
   });
 }
 

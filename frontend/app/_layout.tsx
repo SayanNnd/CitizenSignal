@@ -31,6 +31,7 @@ function Navigator() {
         <Stack.Screen name="report" options={{ title: 'New Post', presentation: 'modal' }} />
         <Stack.Screen name="issue/[id]" options={{ title: 'Issue' }} />
         <Stack.Screen name="my-issues" options={{ title: 'Your Issues' }} />
+        <Stack.Screen name="admin" options={{ title: 'Manage Issues' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
         <Stack.Screen name="help" options={{ title: 'Help' }} />
         <Stack.Screen name="login" options={{ title: '', presentation: 'modal' }} />

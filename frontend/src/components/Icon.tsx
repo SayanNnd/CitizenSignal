@@ -5,7 +5,7 @@ import type { Category } from '../types';
 export type UiIconName =
   | 'menu' | 'close' | 'plus' | 'search' | 'locate' | 'pin' | 'camera' | 'image' | 'check'
   | 'arrow-up' | 'send' | 'comment' | 'sliders' | 'help' | 'logout' | 'user' | 'list'
-  | 'clock' | 'alert' | 'chevron-down' | 'chevron-up' | 'chevron-right' | 'chevron-left';
+  | 'clock' | 'alert' | 'shield' | 'chevron-down' | 'chevron-up' | 'chevron-right' | 'chevron-left';
 
 /** UI glyphs plus one glyph per issue category, all drawn from Views (no icon package, no emoji). */
 export type IconName = UiIconName | Category;
@@ -52,6 +52,7 @@ const SHAPES: Record<string, Shape[]> = {
   user: [dot(8, 3, 8), { l: 4, t: 14, w: 16, h: 7, rr: [8, 8, 2, 2] }],
   list: [dot(3, 4.5, 3), bar(8, 5, 13), dot(3, 10.5, 3), bar(8, 11, 13), dot(3, 16.5, 3), bar(8, 17, 13)],
   clock: [ring(3, 3, 18), bar(11, 7, 2, 6), bar(11, 11, 5)],
+  shield: [{ l: 4, t: 2, w: 16, h: 20, rr: [3, 3, 8, 8], bw: 2 }, { l: 10, t: 6.5, w: 4.5, h: 8, bw: 2, sides: ['r', 'b'], rot: 45 }],
   'chevron-down': [chev(7, 5, 45)],
   'chevron-up': [chev(7, 9, -135)],
   'chevron-right': [chev(4.5, 7, -45)],

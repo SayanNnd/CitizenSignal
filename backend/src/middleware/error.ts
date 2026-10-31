@@ -10,6 +10,7 @@ const MULTER_MESSAGES: Partial<Record<multer.ErrorCode, string>> = {
 
 function codeForStatus(status: number): ErrorCode {
   if (status === 401) return 'UNAUTHORIZED';
+  if (status === 403) return 'FORBIDDEN';
   if (status === 404) return 'NOT_FOUND';
   if (status >= 400 && status < 500) return 'VALIDATION_ERROR';
   return 'SERVER_ERROR';

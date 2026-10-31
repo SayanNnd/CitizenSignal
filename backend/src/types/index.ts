@@ -20,6 +20,8 @@ export interface AuthUser {
   email?: string;
   /** Public display name for comments: "Meera K." from a profile name, else the email before the @. */
   name: string;
+  /** True when the email is listed in `ADMIN_EMAILS` (config/admin.ts). */
+  is_admin: boolean;
 }
 
 /** A row of the `issues` table as Postgres returns it. */

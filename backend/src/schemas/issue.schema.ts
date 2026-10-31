@@ -90,6 +90,11 @@ export const IssueIdSchema = z.object({
   id: z.uuid('Invalid issue id'),
 });
 
+/** JSON body of `PATCH /issues/:id/status` (admins only). */
+export const StatusBodySchema = z.object({
+  status: z.enum(STATUSES, { error: statusError }),
+});
+
 /** JSON body of `POST /issues/:id/comments`. The author comes from the token, never the body. */
 export const CommentBodySchema = z.object({
   body: z

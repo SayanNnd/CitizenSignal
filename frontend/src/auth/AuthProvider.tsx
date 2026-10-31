@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { USE_MOCK_AUTH } from '../lib/env';
-import { login } from '../api/auth';
+import { getMe, login } from '../api/auth';
+import { isMockAdmin } from '../api/mock';
 
 export interface SignInResult {
   error: string | null;
@@ -15,6 +16,8 @@ interface AuthContextValue {
   session: Session | null;
   user: User | null;
   loading: boolean;
+  /** True when the server lists this account's email as an admin (`GET /api/auth/me`). */
+  isAdmin: boolean;
   /** Signs in, or registers first if the email is new. */
   signIn: (email: string, password: string) => Promise<SignInResult>;
   signOut: () => Promise<void>;
@@ -63,6 +66,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryClient.invalidateQueries();
   }, [userId, queryClient]);
 
+  // Admin is a server-side list of emails, so ask the server; a restored session never goes through login.
+  const me = useQuery({
+    queryKey: ['me', userId],
+    queryFn: getMe,
+    enabled: !!userId && !USE_MOCK_AUTH,
+    staleTime: Infinity,
+  });
+  const isAdmin = USE_MOCK_AUTH ? isMockAdmin(session?.user.email) : !!me.data?.is_admin;
+
   const signIn = async (email: string, password: string): Promise<SignInResult> => {
     if (USE_MOCK_AUTH) {
       setSession(fakeSession(email.trim().toLowerCase()));
@@ -86,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, isAdmin, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

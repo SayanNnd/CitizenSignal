@@ -1,6 +1,7 @@
 import { apiFetch, apiUpload } from './client';
 import {
   mockListIssues, mockGetIssue, mockReportIssue, mockListMyIssues, mockSetUpvote, mockListComments, mockAddComment,
+  mockSetStatus,
 } from './mock';
 import { USE_MOCK } from '../lib/env';
 import { DEFAULT_RADIUS_M, MAX_RADIUS_M } from '../constants/limits';
@@ -40,6 +41,12 @@ export async function addUpvote(issueId: string): Promise<{ issue: Issue }> {
 export async function removeUpvote(issueId: string): Promise<{ issue: Issue }> {
   if (USE_MOCK) return mockSetUpvote(issueId, false);
   return apiFetch(`/api/issues/${issueId}/upvote`, { method: 'DELETE' });
+}
+
+/** Admins only (403 otherwise): close an issue (`resolved`) or open it again. */
+export async function setIssueStatus(issueId: string, status: Status): Promise<{ issue: Issue }> {
+  if (USE_MOCK) return mockSetStatus(issueId, status);
+  return apiFetch(`/api/issues/${issueId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
 
 /** Issues the caller reported or contributed evidence to (requires auth; 401 otherwise). */

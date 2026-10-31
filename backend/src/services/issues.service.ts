@@ -418,6 +418,32 @@ async function addEvidence(
   return { issue: toIssue(row, has_upvoted), reopened };
 }
 
+// ── admin ────────────────────────────────────────────────────────────────────
+
+/**
+ * Admin override: close an issue (`resolved`, `resolved_at` = now) or open it again. Reopening here
+ * is an undo, not a recurrence: it clears `resolved_at` and leaves `recurrence_count` alone, which
+ * only goes up when a citizen reports a fixed issue again (`reopenIfResolved`). Setting the status
+ * the issue already has changes nothing.
+ */
+export async function setIssueStatus(issueId: string, status: Status, userId: string): Promise<Issue> {
+  let row = await requireIssueRow(issueId);
+
+  if (row.status !== status) {
+    const { data, error } = await supabase
+      .from('issues')
+      .update({ status, resolved_at: status === 'resolved' ? new Date().toISOString() : null })
+      .eq('id', issueId)
+      .select()
+      .single();
+    if (error) throw new Error(`Status update failed: ${error.message}`);
+    row = data as IssueRow;
+  }
+
+  const upvoted = await getUpvotedIds(userId, [issueId]);
+  return toIssue(row, upvoted.has(issueId));
+}
+
 // ── upvotes ──────────────────────────────────────────────────────────────────
 
 /** One vote per user per issue, enforced by the (issue_id, user_id) primary key. Idempotent. */

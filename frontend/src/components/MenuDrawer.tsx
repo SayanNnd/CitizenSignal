@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Modal, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { shadow, spacing } from '../constants/theme';
+import { radius, shadow, spacing } from '../constants/theme';
 import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 import { Icon, type IconName } from './Icon';
 import { SignalMark } from './SignalMark';
@@ -20,10 +20,12 @@ interface Props {
   onClose: () => void;
   items: MenuItem[];
   email?: string | null;
+  /** Small tag next to the app name, e.g. "ADMIN". */
+  badge?: string;
 }
 
 /** Slide-in side menu laid out like X's: account header, then plain icon + label rows. */
-export function MenuDrawer({ visible, onClose, items, email }: Props) {
+export function MenuDrawer({ visible, onClose, items, email, badge }: Props) {
   const { colors, s } = useThemed(makeStyles);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -77,7 +79,10 @@ export function MenuDrawer({ visible, onClose, items, email }: Props) {
                 <Icon name="close" size={20} color={colors.muted} />
               </Pressable>
             </View>
-            <Text style={s.name}>CitizenSignal</Text>
+            <View style={s.nameRow}>
+              <Text style={s.name}>CitizenSignal</Text>
+              {badge ? <Text style={s.badge}>{badge}</Text> : null}
+            </View>
             <Text style={s.email} numberOfLines={1}>{email ?? 'Not logged in'}</Text>
           </View>
 
@@ -103,7 +108,12 @@ const makeStyles = ({ colors }: ThemeValues) =>
     panel: { flex: 1, backgroundColor: colors.bg, ...shadow.float },
     account: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg },
     accountTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-    name: { fontSize: 20, fontWeight: '800', color: colors.ink, marginTop: spacing.md },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+    name: { fontSize: 20, fontWeight: '800', color: colors.ink },
+    badge: {
+      fontSize: 11, fontWeight: '800', letterSpacing: 1, color: colors.accent, backgroundColor: colors.accentSoft,
+      borderRadius: radius.sm, paddingHorizontal: 6, paddingVertical: 2, overflow: 'hidden',
+    },
     email: { fontSize: 15, color: colors.muted, marginTop: 2 },
     divider: { height: StyleSheet.hairlineWidth, backgroundColor: colors.line },
     row: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg + 4, paddingHorizontal: spacing.lg, paddingVertical: 14 },
