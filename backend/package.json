@@ -1,0 +1,29 @@
+{
+  "name": "citizen-signal-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "seed": "tsx scripts/seed.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^5.1.0",
+    "geolib": "^3.3.4",
+    "multer": "^2.0.2",
+    "sharp": "^0.34.0",
+    "string-similarity": "4.0.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^1.4.12",
+    "@types/node": "^20.14.0",
+    "@types/string-similarity": "^4.0.2",
+    "tsx": "^4.15.0",
+    "typescript": "^5.5.0"
+  }
+}

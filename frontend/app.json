@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "CitizenSignal",
+    "slug": "citizen-signal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.citizensignal.app"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "CitizenSignal needs your location to show nearby issues and pin your report."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CitizenSignal needs access to your photos to attach evidence to a report."
+        }
+      ]
+    ],
+    "scheme": "citizensignal",
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
+
