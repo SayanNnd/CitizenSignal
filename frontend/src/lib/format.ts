@@ -21,3 +21,21 @@ export function priorityLevel(priority: number): number {
 export function formatDistance(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`;
 }
+
+export type Severity = 'low' | 'medium' | 'high';
+
+/** Same priority scale as the old meter: levels 1–2 low, 3 medium, 4–5 high. */
+export function severityOf(priority: number): Severity {
+  const level = priorityLevel(priority);
+  return level >= 4 ? 'high' : level === 3 ? 'medium' : 'low';
+}
+
+/**
+ * The API's title is "<Category>: <first words of the description>". The category is shown
+ * separately, so drop that prefix and use the rest as the headline.
+ */
+export function displayTitle(title: string, categoryLabel: string): string {
+  const prefix = `${categoryLabel}:`;
+  const rest = title.startsWith(prefix) ? title.slice(prefix.length).trim() : title.trim();
+  return rest ? rest.charAt(0).toUpperCase() + rest.slice(1) : categoryLabel;
+}

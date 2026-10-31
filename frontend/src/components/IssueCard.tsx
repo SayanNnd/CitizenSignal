@@ -2,11 +2,11 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import type { Issue } from '../types';
 import { CATEGORY_LABELS, CATEGORY_COLORS } from '../constants/categories';
-import { timeAgo } from '../lib/format';
-import { radius, spacing, white } from '../constants/theme';
+import { displayTitle, timeAgo } from '../lib/format';
+import { radius, spacing } from '../constants/theme';
 import { useThemed, type ThemeValues } from '../theme/ThemeProvider';
 import { Icon, type IconName } from './Icon';
-import { PriorityMeter } from './PriorityMeter';
+import { SeverityTriangle } from './SeverityTriangle';
 
 interface Props {
   issue: Issue;
@@ -17,10 +17,11 @@ interface Props {
   badge?: string;
 }
 
-/** Full-width feed row in the style of an X post: avatar, header, text, media, action counts. */
+/** Full-width feed row (X-style layout): category line, headline, short description, photo, counts. */
 export function IssueCard({ issue, onPress, highlighted, distanceLabel, badge }: Props) {
   const { colors, s } = useThemed(makeStyles);
   const tint = CATEGORY_COLORS[issue.category];
+  const label = CATEGORY_LABELS[issue.category];
 
   return (
     <TouchableOpacity
@@ -28,31 +29,26 @@ export function IssueCard({ issue, onPress, highlighted, distanceLabel, badge }:
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <View style={[s.avatar, { backgroundColor: tint }]}>
-        <Icon name={issue.category} size={22} color={white} />
+      {badge ? <Text style={s.badge}>{badge}</Text> : null}
+
+      <View style={s.metaRow}>
+        <Icon name={issue.category} size={15} color={tint} />
+        <Text style={[s.category, { color: tint }]}>{label}</Text>
+        <Text style={s.meta} numberOfLines={1}>
+          {'·  '}{timeAgo(issue.created_at)}{distanceLabel ? `  ·  ${distanceLabel}` : ''}
+        </Text>
+        <SeverityTriangle priority={issue.priority} />
       </View>
 
-      <View style={s.body}>
-        {badge ? <Text style={s.badge}>{badge}</Text> : null}
-        <View style={s.header}>
-          <Text style={s.category} numberOfLines={1}>{CATEGORY_LABELS[issue.category]}</Text>
-          <Text style={s.meta} numberOfLines={1}>
-            {'  '}{timeAgo(issue.created_at)}{distanceLabel ? `  ·  ${distanceLabel}` : ''}
-          </Text>
-        </View>
+      <Text style={s.title} numberOfLines={2}>{displayTitle(issue.title, label)}</Text>
+      <Text style={s.description} numberOfLines={2}>{issue.description}</Text>
 
-        <Text style={s.text} numberOfLines={4}>{issue.description}</Text>
+      {issue.image_url ? <Image source={{ uri: issue.image_url }} style={s.media} /> : null}
 
-        {issue.image_url ? <Image source={{ uri: issue.image_url }} style={s.media} /> : null}
-
-        <View style={s.actions}>
-          {issue.comment_count !== undefined && <Stat icon="comment" value={issue.comment_count} />}
-          <Stat icon="arrow-up" value={issue.upvotes} active={issue.has_upvoted} />
-          <Stat icon="camera" value={issue.evidence_count} />
-          <View style={s.meter}>
-            <PriorityMeter priority={issue.priority} />
-          </View>
-        </View>
+      <View style={s.actions}>
+        {issue.comment_count !== undefined && <Stat icon="comment" value={issue.comment_count} />}
+        <Stat icon="arrow-up" value={issue.upvotes} active={issue.has_upvoted} />
+        <Stat icon="camera" value={issue.evidence_count} />
       </View>
     </TouchableOpacity>
   );
@@ -72,20 +68,17 @@ function Stat({ icon, value, active }: { icon: IconName; value: number; active?:
 const makeStyles = ({ colors, type }: ThemeValues) =>
   StyleSheet.create({
     post: {
-      flexDirection: 'row',
-      gap: spacing.md,
       paddingHorizontal: spacing.lg,
-      paddingVertical: spacing.md,
+      paddingVertical: spacing.md + 2,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.line,
     },
-    avatar: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-    body: { flex: 1 },
-    badge: { fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: 2 },
-    header: { flexDirection: 'row', alignItems: 'center' },
-    category: { fontSize: 15, fontWeight: '800', color: colors.ink, flexShrink: 0 },
-    meta: { flex: 1, fontSize: 14, color: colors.muted },
-    text: { fontSize: 15, color: colors.ink, lineHeight: 21, marginTop: 2 },
+    badge: { fontSize: 12, fontWeight: '700', color: colors.muted, marginBottom: spacing.xs },
+    metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    category: { fontSize: 13, fontWeight: '800' },
+    meta: { flex: 1, fontSize: 13, color: colors.muted },
+    title: { fontSize: 17, fontWeight: '800', color: colors.ink, lineHeight: 23, marginTop: spacing.xs },
+    description: { fontSize: 14, color: colors.inkSoft, lineHeight: 20, marginTop: 2 },
     media: {
       width: '100%', height: 190, borderRadius: radius.lg, marginTop: spacing.sm,
       borderWidth: StyleSheet.hairlineWidth, borderColor: colors.line,
@@ -93,5 +86,4 @@ const makeStyles = ({ colors, type }: ThemeValues) =>
     actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl, marginTop: spacing.sm },
     stat: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     statText: { ...type.mono, fontSize: 13 },
-    meter: { marginLeft: 'auto' },
   });
