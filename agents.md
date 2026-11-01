@@ -4,7 +4,7 @@ Read this before touching the repo. Then read `roadmap.md` (decisions, API contr
 
 ## Project in one paragraph
 
-CitizenSignal is a civic issue map. People report infrastructure problems with a photo and GPS location. The server compares each new report with nearby ones (distance via Geolib, text similarity via string-similarity), merges duplicates, reopens issues that were marked resolved, and ranks everything by a priority score that grows with time and upvotes. Hackathon build: ~5 hours, demo-driven.
+CitizenSignal is a civic issue map. People report infrastructure problems with a photo and GPS location. The server compares each new report with nearby ones (distance via Geolib, text similarity via string-similarity), merges duplicates, reopens issues that were marked resolved, and ranks everything by a priority score that grows with time and upvotes.
 
 ## Stack
 
@@ -42,7 +42,7 @@ Several libraries here are new or changed recently (Express 5, Multer 2.x, Zod, 
 ```
 # backend
 cd backend && npm install && npm run dev      # tsx watch src/server.ts → http://0.0.0.0:4000
-npm run seed                                   # resets demo data + photos (scripts/seed.ts)
+npm run seed                                   # resets sample data + photos (scripts/seed.ts; use a development database)
 npm run smoke                                  # end-to-end test of every write path (server must be running)
 npx tsc --noEmit                               # type check
 
@@ -80,7 +80,7 @@ Server must listen on `0.0.0.0` so phones can reach it. Phones cannot use `local
 ## Matching and priority — don't "improve" these
 
 - Order: same category → bounding-box prefilter → Geolib distance → string-similarity score → three outcomes (`merged`/`reopened`, `needs_confirmation`, `created`).
-- Resolved issues **must** be included as candidates — that is the headline feature.
+- Resolved issues **must** be included as candidates — this is a core product behavior.
 - `needs_confirmation` saves nothing. The app re-submits with `confirm_issue_id` or `force_new=true`.
 - Priority formula: see `roadmap.md` §7. Only tune the weights, don't restructure.
 
@@ -90,15 +90,15 @@ Roles, invites or an admin portal beyond the one "Manage Issues" screen for `ADM
 
 ## Decision log — `qa-backend.md` / `qa-frontend.md` (required on every task)
 
-Each track keeps its **own** decision log in the repo root: **Track A writes only `qa-backend.md`, Track B writes only `qa-frontend.md`.** Never edit the other track's file. At the end of **every task or prompt**, append one entry to your track's file before you finish. These files are our cheat sheet for judges' questions ("why did you choose X?"), so write for a human reader who wasn't there.
+Each track keeps its **own** decision log in the repo root: **Track A writes only `qa-backend.md`, Track B writes only `qa-frontend.md`.** Never edit the other track's file. At the end of **every task or prompt**, append one entry to your track's file before you finish. These files explain implementation decisions to future contributors, so write for a human reader who wasn't there.
 
 Each entry has these fields, kept short (1–2 lines each):
 
 - **Task:** what you were asked to do.
 - **Decision:** the main design or implementation choice you made, and where it lives (file or function).
 - **Why:** the reason you picked it over the alternatives (name the alternative you rejected).
-- **Why it's good:** the concrete benefit (simplicity, speed, demo reliability, matches the contract).
-- **Fallbacks / limits:** small weaknesses, shortcuts, or known risks, and what we'd do with more time. Be honest — don't oversell.
+- **Why it's good:** the concrete benefit (simplicity, reliability, matches the contract).
+- **Fallbacks / limits:** small weaknesses, shortcuts, or known risks, and practical next steps. Be honest — don't oversell.
 
 Rules: **append only** (add at the bottom, never edit or reorder earlier entries); one entry per task, grouping several small choices together. If a task had no real design choice (typo, rename), write a one-line entry saying so rather than skipping it. If you change the API contract (`roadmap.md` §4), also add a one-line note to the other track's file tagged `[ALL]`. Never put secrets or keys in these files. If two people work on the same track, `git pull --rebase` before appending.
 

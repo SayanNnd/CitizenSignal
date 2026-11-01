@@ -4,8 +4,6 @@ CitizenSignal is a map of broken things in your neighbourhood. You take a photo 
 
 The part we care most about is what happens when two people report the same problem, or when something that was "fixed" breaks again. Instead of piling up ten separate complaints, CitizenSignal works out that they are the same issue and merges them. If the issue had already been marked as fixed, it gets reopened and its history is kept, so nobody can quietly close a problem that keeps coming back.
 
-We built it at a hackathon in about five hours, so treat it as a working prototype rather than a finished product.
-
 ## Why we built it
 
 Anyone who has tried to report a civic problem knows the pattern. The same pothole gets reported over and over as separate tickets, which hides how many people it actually affects. Then it gets patched, marked as resolved, breaks again a week later, and the next report starts from zero as if it never happened.
@@ -25,7 +23,7 @@ We wanted three things:
 - **Priority and severity.** Every issue has a priority score that grows with upvotes, extra reports, repeat failures and time spent waiting. In the app it shows up as a small yellow, orange or red triangle.
 - **Issue page.** A large photo, the full description, upvotes, a timeline of every report and the date it was fixed, and a comment thread.
 - **Search.** Look up a place to see issues there, or search the issues near you. The map moves to whatever you pick.
-- **Google sign-in.** Only needed to upvote and comment. Browsing and reporting work without signing in.
+- **Email and password sign-in.** Required to upvote, comment, and access admin actions. Browsing and reporting work without signing in.
 - **Your Issues.** Everything you reported, or added a report to, in one list.
 - **Light and dark themes**, including matching map styles.
 
@@ -62,7 +60,7 @@ Days open counts from when the issue was created, or from when it was last reope
 - React Native with Expo, targeting Android through Expo Go
 - TypeScript, Expo Router for screens, TanStack Query for server data
 - react-native-maps, expo-location, expo-image-picker and expo-image-manipulator
-- Supabase JS for sign-in, with Google through a browser OAuth flow
+- Supabase JS for email and password sessions
 
 **Server** (`backend/`)
 - Node 24 and Express 5, written in TypeScript and run with tsx
@@ -81,7 +79,7 @@ The app and the server are completely separate. They share no code and only talk
 CitizenSignal/
   backend/
     sql/schema.sql          tables, indexes and storage notes
-    scripts/seed.ts         resets the demo data
+    scripts/seed.ts         resets the sample data
     scripts/smoke.ts        end-to-end test of every write path
     src/
       config/               environment, Supabase client, matching thresholds
@@ -95,7 +93,7 @@ CitizenSignal/
       components/           feed rows, map buttons, sheets, icons
       constants/theme.ts    colour palettes for light and dark mode
       location/             current location and selected area
-  roadmap.md                decisions, API contract, database, demo script
+  roadmap.md                product decisions, API contract, database, acceptance scenarios
   agents.md                 working rules for the team (and AI assistants)
   qa-frontend.md            why the app is built the way it is
   qa-backend.md             why the server is built the way it is
@@ -109,8 +107,7 @@ You will need Node 24, an Android phone with Expo Go installed, and a Supabase p
 
 1. Create a project at supabase.com.
 2. Open the SQL editor and run `backend/sql/schema.sql`.
-3. Under Authentication, enable the Google provider, and add `exp://**` to the allowed redirect URLs so sign-in can return to Expo Go.
-4. While the Google consent screen is in testing mode, only accounts added as test users can sign in. Add the accounts you plan to use.
+3. Under Authentication → Sign In / Providers, enable the Email provider. The server creates new accounts as confirmed, so the app does not use email confirmation or OTP.
 
 The photo bucket (`issue-images`) is created by the seed script if it doesn't exist yet.
 
@@ -136,8 +133,10 @@ ADMIN_EMAILS=admin@gmail.com
 
 The service role key has full access to your database. Keep it on the server and never put it in the app.
 
+The seed command clears existing issues, evidence, upvotes, comments, and stored photos before inserting sample data. Run it only against a development database.
+
 ```bash
-npm run seed    # optional: loads demo issues, including one fixed pothole
+npm run seed    # optional: loads sample issues, including one fixed pothole
 npm run dev     # starts the server on port 4000
 ```
 
@@ -163,14 +162,14 @@ EXPO_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 Use the anon key here, not the service role key. Then start Expo and scan the QR code with Expo Go:
 
 ```bash
-npx expo start -c
+npx @expo/agent-cli start
 ```
 
-The `-c` clears the cache, which you need whenever you change `.env`.
+Restart the development server after changing the environment file.
 
 ### Trying the app without a server
 
-If you only want to look at the app, leave `EXPO_PUBLIC_USE_MOCK=true` (the default). The app then uses built-in sample data that behaves like the real API, including duplicate detection, reopening, upvotes and comments, and needs no server at all. Sign-in is still real if the Supabase values are filled in, and falls back to a fake account if they aren't.
+For frontend development without a server, leave `EXPO_PUBLIC_USE_MOCK=true` (the default). The app uses built-in sample data that exercises duplicate detection, reopening, upvotes, and comments. Sign-in uses a fake account in mock mode or when Supabase configuration is missing.
 
 ## The API in brief
 
@@ -179,6 +178,7 @@ Everything lives under `/api`. The full contract, including every field and erro
 | Method | Path | Sign-in | What it does |
 |---|---|---|---|
 | GET | `/health` | no | Checks the server is up |
+| POST | `/auth/login` | no | Signs in or creates an email and password account |
 | GET | `/issues?lat=&lng=&radius_m=` | optional | Nearby issues, highest priority first. Also accepts `q`, `category` and `status`. |
 | GET | `/issues/mine` | required | Issues you reported or added a report to |
 | GET | `/issues/:id` | optional | One issue with all of its reports |
@@ -197,21 +197,21 @@ cd frontend && npx tsc --noEmit    # type check the app
 cd backend && npm run smoke        # with the server running: exercises every write path
 ```
 
-The smoke test works in an empty spot of the South Pacific, uses a throwaway account, and deletes everything it created when it finishes, so it is safe to run against the demo database.
+The smoke test uses an isolated location and a throwaway account, then deletes the records and photos it created. Run it against a configured development or test project.
 
 ## Known limitations
 
 We would rather be upfront about these:
 
-- **Android only.** We only tested on Android through Expo Go. iOS was out of scope.
+- **Android only.** The app currently targets Android through Expo Go; iOS has not been implemented or validated.
 - **Only the latest fix date is stored.** If an issue is fixed, breaks, and is fixed again, the timeline shows only the most recent fix.
 - **The thresholds are hand-tuned.** The matching thresholds and priority weights are sensible starting points, not values backed by real data.
-- **Google sign-in is limited to test users** while the consent screen is in testing mode.
+- **Email ownership is not verified.** The server creates email/password accounts as confirmed; add an ownership check before using this for a public production service.
 - **Search runs in the app.** It filters the issues already loaded nearby rather than querying the server.
 - **Admins are a fixed list of emails.** There are no roles or invites; whoever first logs in with an admin email sets its password, so claim those accounts before sharing the app.
 - **string-similarity is deprecated on npm.** We pinned it at 4.0.4 because it still works well for this.
 
-## What we would do next
+## Future work
 
 - Keep a full history of fixes, so repeat failures are easy to see at a glance
 - A simple dashboard for city staff to triage and close issues
@@ -221,7 +221,7 @@ We would rather be upfront about these:
 
 ## Documentation
 
-- `roadmap.md` covers the decisions we locked in, the API contract, the database schema and the demo script.
+- `roadmap.md` covers product decisions, the API contract, the database schema and acceptance scenarios.
 - `agents.md` lists the working rules for anyone, person or AI assistant, changing the code.
 - `qa-frontend.md` and `qa-backend.md` explain why things are built the way they are, written for anyone who asks "why did you do it like this?"
 

@@ -95,3 +95,10 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Rejected a roles table or Supabase `app_metadata` flag: both need a migration or an admin call to grant, and `app_metadata` would only show up in tokens issued after the change. An env list is one line to edit and takes effect on restart. Rejected counting an admin reopen as a recurrence: it would inflate the "came back" headline stat with admin undo clicks.
 - **Why it's good:** No schema change, no new endpoint for listing, and the role can't be spoofed from the app. Verified against the real Supabase project: full smoke run passes (all checks, including the 12 new ones), and live login returned `is_admin: true` for a listed email and `false` for another (test accounts deleted afterwards).
 - **Fallbacks / limits:** Whoever logs in first with an admin email creates that account and picks its password — claim `admin@gmail.com` before sharing the app. Changing the list needs a server restart. No audit log of who closed what. Admin reopen loses the previous fix date (the API only keeps the latest one anyway).
+
+### [ALL] Standalone documentation refresh — 2026-11-01
+- **Task:** Remove expired hackathon scheduling and update the project status documents.
+- **Decision:** Reframed roadmap.md as product guidance, replaced the timed checklist with a verification snapshot, and aligned README.md and agents.md with email/password auth and current development setup.
+- **Why:** The old time box, feature freeze, and submission steps had expired; continuing them would mislead contributors.
+- **Why it's good:** The docs describe ongoing product work and separate previously verified behavior from environment or phone checks still needed.
+- **Fallbacks / limits:** Status comes from source and existing QA notes; no application tests were rerun and pending device or environment checks remain open.

@@ -1,19 +1,17 @@
-# CitizenSignal — Hackathon Roadmap
+# CitizenSignal — Product and Technical Roadmap
 
-> **Pitch:** A community-powered civic issue map that detects duplicate complaints and catches infrastructure problems that come back after being marked resolved.
-> **Demo moment:** Report an issue next to an already-resolved pothole → the system recognizes it, **reopens** the old issue, bumps `recurrence_count`, and attaches your photo as evidence instead of creating a disconnected complaint.
-
-Time box: ~5 hours. Assumed start 11:45 → end 16:45. **Feature freeze 15:30.** Shift the clock times if your start differs; keep the order.
+> **Purpose:** A community-powered civic issue map that detects duplicate complaints and catches infrastructure problems that return after being marked resolved.
+> **Core behavior:** A report near a resolved issue can reopen it, increment `recurrence_count`, and attach the new photo as evidence instead of creating a disconnected complaint.
 
 ---
 
-## 1. Locked decisions (don't re-debate during the hackathon)
+## 1. Product and platform decisions
 
 | Topic | Decision |
 |---|---|
 | Platform | **Android only**, tested in Expo Go. No iOS work (no HEIC handling, no iOS-specific config). |
-| Auth | **Supabase Auth, email + password** (changed back from Google sign-in). One form: `POST /api/auth/login` signs in, or creates the account first if the email is new. The server creates accounts already confirmed (`auth.admin.createUser({ email_confirm: true })`), so no confirmation email or OTP is ever sent. Dashboard: Authentication → Sign In / Providers → **Email enabled**. No Google, no magic links. |
-| What needs login | **Upvoting requires login.** Browsing the map/list is public. Reporting uses *optional* auth (user id attached if logged in). To make reporting login-only later, swap `optionalAuth` → `requireAuth` on one route. |
+| Auth | **Supabase Auth, email + password.** One form: `POST /api/auth/login` signs in, or creates the account first if the email is new. The server creates accounts already confirmed (`auth.admin.createUser({ email_confirm: true })`), so no confirmation email or OTP is ever sent. Dashboard: Authentication → Sign In / Providers → **Email enabled**. No Google, no magic links. |
+| What needs login | **Upvoting and commenting require login.** Browsing the map/list is public. Reporting uses *optional* auth (user id attached if logged in). To make reporting login-only later, swap `optionalAuth` → `requireAuth` on one route. |
 | Token flow | App gets `{ access_token, refresh_token }` from `POST /api/auth/login`, stores them with `supabase.auth.setSession` (so `@supabase/supabase-js` refreshes them) → sends `Authorization: Bearer <access_token>` to Express → server verifies with `supabase.auth.getUser(token)`. |
 | Admin | A fixed list of emails in the server's `ADMIN_EMAILS` (e.g. `admin@gmail.com`). Admins log in through the same form; the server decides the role from the verified email, never the request. The app shows them a **Manage Issues** screen (hamburger menu): every issue in the selected area, open and fixed, with close / reopen buttons. No roles table, no invites. |
 | Mandatory packages | **Zod, Multer, Sharp, Geolib, string-similarity** — all five used on the server, versions below. |
@@ -27,7 +25,7 @@ npm i -D typescript tsx @types/node @types/express @types/cors @types/multer @ty
 
 - **multer ≥ 2.0.2** — earlier versions have known DoS vulnerabilities. Do not install 1.x.
 - **string-similarity@4.0.4** — the final release. npm flags it deprecated; it still works fine (Dice coefficient). Pin it, ignore the warning, mention it in the README.
-- **zod, sharp, geolib** — install latest. Node 24 as planned.
+- **zod, sharp, geolib** — install latest. Use Node 24 for the backend runtime.
 - Frontend also uses `zod` and `geolib` (see §3).
 
 ---
@@ -50,7 +48,7 @@ citizensignal/
 │   ├── sql/
 │   │   └── schema.sql            # tables + indexes + storage notes
 │   ├── scripts/
-│   │   ├── seed.ts               # repeatable demo data (resolved pothole + neighbours, with photos)
+│   │   ├── seed.ts               # repeatable sample data (resolved pothole + neighbours, with photos)
 │   │   └── smoke.ts              # `npm run smoke`: end-to-end test of every write path (self-cleaning)
 │   └── src/
 │       ├── server.ts             # starts listening
@@ -67,8 +65,10 @@ citizensignal/
 │       │   └── issue.schema.ts   # Zod schemas (report, list query, ids)
 │       ├── routes/
 │       │   ├── health.routes.ts
+│       │   ├── auth.routes.ts
 │       │   └── issues.routes.ts
 │       ├── controllers/
+│       │   ├── auth.controller.ts
 │       │   └── issues.controller.ts
 │       ├── services/
 │       │   ├── image.service.ts      # Sharp + storage upload
@@ -84,13 +84,15 @@ citizensignal/
     ├── .env.example
     ├── app/                      # Expo Router screens
     │   ├── _layout.tsx           # QueryClient + AuthProvider
-    │   ├── (tabs)/
-    │   │   ├── _layout.tsx
-    │   │   ├── index.tsx         # Map
-    │   │   ├── list.tsx          # Compact nearby list
-    │   │   └── report.tsx        # Report form
-    │   ├── issue/[id].tsx        # Detail + upvote + evidence
-    │   └── login.tsx             # email + password, signs in or registers (opened when upvoting logged-out)
+    │   ├── index.tsx             # Map and nearby feed
+    │   ├── search.tsx
+    │   ├── report.tsx
+    │   ├── my-issues.tsx
+    │   ├── admin.tsx
+    │   ├── settings.tsx
+    │   ├── help.tsx
+    │   ├── issue/[id].tsx        # Detail + upvote + evidence + comments
+    │   └── login.tsx             # email + password sign-in or registration
     └── src/
         ├── api/
         │   ├── client.ts         # fetch wrapper, adds Bearer token
@@ -103,6 +105,8 @@ citizensignal/
         ├── hooks/                # useIssues, useReportIssue, useUpvote ...
         ├── components/           # IssueCard, CategoryChip, DuplicateSheet ...
         ├── constants/            # categories, colours
+        ├── location/             # current location and selected area
+        ├── theme/                # light/dark theme state
         └── types/                # mirrors the API contract in §4
 ```
 
@@ -130,7 +134,7 @@ Android + Expo Go: `react-native-maps` works out of the box (no Google Maps key 
 | `CORS_ORIGIN=*` | `EXPO_PUBLIC_USE_MOCK=true/false` |
 | `ADMIN_EMAILS=admin@gmail.com` (comma-separated) | — (with mock auth, any `admin@…` email is an admin) |
 
-Phones cannot reach `localhost`. Use the laptop's LAN IP (same Wi-Fi) or a tunnel (Cloudflare Tunnel / ngrok). Decide in the first 30 minutes.
+Phones cannot reach `localhost`. Use the computer's LAN IP (same Wi-Fi) or a tunnel (Cloudflare Tunnel / ngrok).
 
 ---
 
@@ -243,45 +247,30 @@ Computed **at read time** — no cron job, always fresh.
 priority = 2*upvotes + 1*evidence_count + 5*recurrence_count + 1.5*days_open
 ```
 (`days_open` counts from `created_at`, or from `reopened_at` if reopened; `0` when resolved.)
-Weights are guesses — tune once the seed data is in so the demo ordering looks sensible. List endpoints sort by this descending.
+Weights are initial estimates. Validate the ordering against representative issue data and adjust the weights as needed. List endpoints sort by this descending.
 
 ---
 
-## 8. Parallel work plan
+## 8. Working across the app and server
 
-Two tracks + one shared contract. If there's a third peer, they take the **Floating** items.
+The frontend and backend remain separate projects and communicate through the HTTP contract in §4. Track A owns `backend/`; Track B owns `frontend/`. Coordinate any contract change with both sides, update this document, then update the client and server together.
 
-| Time | Track A — Backend | Track B — Frontend | Floating / All |
-|---|---|---|---|
-| 11:45–12:15 | Repo + Express skeleton, `/health`, env validation | Expo app scaffold, Expo Router tabs, env, supabase client | **All:** Supabase project, run `schema.sql`, create bucket, enable the Email provider (§1), pick LAN/tunnel URL, agree on §4 |
-| 12:15–13:30 | `GET /issues`, `POST /issues` happy path: Multer → Zod → Sharp → storage → insert; `requireAuth/optionalAuth` | Login screen + AuthProvider; Map + List screens on **mock data** (`EXPO_PUBLIC_USE_MOCK=true`) | Seed script skeleton |
-| 13:30–14:15 | `matching.service` (3 outcomes + reopen), `priority.service`, upvote/unvote endpoints | Report form: category, description, photo (picker + manipulator), GPS pin on map | Seed script: 1 resolved pothole + 3–4 neighbours |
-| 14:15–15:00 | Bug fixes from integration; `GET /issues/:id` with evidence | **Flip mock OFF**, wire real API; `DuplicateSheet` for `needs_confirmation`; upvote button with login gate | **Integration session #1** — full report flow on a real Android phone |
-| 15:00–15:30 | Edge cases: validation messages, big file, no GPS | Issue detail screen, loading/empty/error states | Tune priority weights |
-| **15:30** | **FEATURE FREEZE** | | |
-| 15:30–16:30 | Only fixes | Only fixes + polish | Demo rehearsal ×3, README, pitch notes |
-| 16:30–16:45 | Buffer | Buffer | Final seed reset, phone charged, tunnel up |
+For local setup and run commands, use the instructions in `README.md`. Use `EXPO_PUBLIC_USE_MOCK=true` for frontend development without a running API. The backend seed script supplies repeatable sample records for local development and verification.
 
-**Contract change protocol:** if either track needs to change §4, message the other first, update this file, then code.
+## 9. Core acceptance scenarios
 
----
+Use these scenarios when validating changes to reporting, matching, or account flows:
 
-## 9. Demo script (3 minutes)
+1. Submit a report with a valid category, description, location, and photo. A new issue is created when no match exists.
+2. Submit a similar report near an open issue. It is merged as additional evidence.
+3. Submit a similar report near a resolved issue. The issue reopens, its recurrence count increases, and the report is attached as evidence.
+4. Submit a possible but uncertain match. The API returns candidates without saving; confirming a candidate merges the report, while choosing a new issue creates one.
+5. Browse and report while logged out. Signing in is required for upvotes, comments, and admin actions; only configured admin accounts can change issue status.
 
-1. Open the map: seeded issues, sorted by priority. Point out that the seeded **resolved** pothole is *not* on the map — the app shows open issues only. (15 s)
-2. Report a new issue at that spot, similar wording, with a photo → app says **"It came back"** (the old issue was reopened). (60 s)
-3. Open it from the feed: "Came back after being fixed" badge, and the timeline reads Reported → Fixed → Reported again → Came back. (15 s)
-4. Report another with vague wording nearby → **"Is this the same issue?"** sheet → confirm → evidence added. (45 s)
-5. Tap upvote logged-out → login prompt → log in → upvote → priority rises. (30 s)
-6. Close: aging priority + duplicate detection = fewer repeated complaints, faster fixes. (15 s)
+## 10. Future development
 
----
-
-## 10. Cut line (drop in this order if behind)
-
-1. Evidence list on the detail screen (keep the count)
-2. List tab (keep map only)
-3. Un-upvote (keep upvote)
-4. Category icons/colours
-
-**Never cut:** report flow, matching with the 3 outcomes, reopen + recurrence, login-gated upvote.
+- Store a complete history of fixes so repeat failures and prior resolution dates remain visible.
+- Expand staff triage tools beyond the existing Manage Issues screen.
+- Notify contributors when an issue is resolved or reopens.
+- Extend search to areas beyond the currently loaded map region.
+- Add iOS support.

@@ -156,3 +156,10 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** Rejected `refreshing={isRefetching}`: the feed's query refetches whenever the map area changes or after an upvote, which would pop the spinner without a pull. The hook only spins for a refresh the user started.
 - **Why it's good:** Standard gesture, no new packages, no change to queries or the contract.
 - **Fallbacks / limits:** `tsc` passes and the Android bundle builds; **not yet checked on a phone**. Pulling the feed while the sheet is half-open also expands it to full (the list's existing scroll behaviour).
+
+### [ALL] Standalone documentation refresh — 2026-11-01
+- **Task:** Remove expired hackathon scheduling and update the project status documents.
+- **Decision:** Reframed roadmap.md as product guidance, replaced the timed checklist with a verification snapshot, and aligned README.md and agents.md with email/password auth and current development setup.
+- **Why:** The old time box, feature freeze, and submission steps had expired; continuing them would mislead contributors.
+- **Why it's good:** The docs describe ongoing product work and separate previously verified behavior from environment or phone checks still needed.
+- **Fallbacks / limits:** Status comes from source and existing QA notes; no application tests were rerun and pending device or environment checks remain open.
