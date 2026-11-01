@@ -8,20 +8,21 @@ import { Icon } from './Icon';
 interface Props {
   status: Status;
   pending: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }
 
 /** Admin-only toggle: "Mark as fixed" on an open issue, "Reopen issue" on a fixed one. */
-export function AdminStatusButton({ status, pending, onPress }: Props) {
+export function AdminStatusButton({ status, pending, disabled = false, onPress }: Props) {
   const { colors, s } = useThemed(makeStyles);
   const fixed = status === 'resolved';
   const fg = fixed ? colors.accent : colors.success;
 
   return (
     <TouchableOpacity
-      style={[s.btn, { backgroundColor: fixed ? colors.accentSoft : colors.successSoft }, pending && { opacity: 0.7 }]}
+      style={[s.btn, { backgroundColor: fixed ? colors.accentSoft : colors.successSoft }, (pending || disabled) && { opacity: 0.7 }]}
       onPress={onPress}
-      disabled={pending}
+      disabled={pending || disabled}
       activeOpacity={0.85}
       accessibilityRole="button"
     >

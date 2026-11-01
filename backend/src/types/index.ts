@@ -66,6 +66,20 @@ export interface CommentRow {
   created_at: string;
 }
 
+/** A completed or currently active fixed period for an issue. */
+export interface ResolutionRow {
+  id: string;
+  issue_id: string;
+  resolved_at: string;
+  reopened_at: string | null;
+}
+
+export interface Resolution {
+  id: string;
+  resolved_at: string;
+  reopened_at: string | null;
+}
+
 // ── API shapes (roadmap.md §4) ───────────────────────────────────────────────
 
 export interface Issue {

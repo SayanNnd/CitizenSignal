@@ -12,6 +12,7 @@ Status key:
 
 - [x] Required backend packages are installed and used: Zod, Multer, Sharp, Geolib, and string-similarity.
 - [x] Supabase schema covers issues, evidence, upvotes, comments, indexes, and the issue-images bucket.
+- [~] Schema source now adds fix cycles and atomic counter/status functions; database rollout remains pending.
 - [~] API routes are implemented for health, email and password login, nearby and personal issue lists, issue detail, reports, matching, upvotes, comments, and admin status changes.
 - [~] Recheck email/password registration and sign-in with the Email provider enabled. The old checklist records a live pass, while a backend QA note says the provider-enabled success path still needed verification.
 - [x] Matching supports creation, merge, uncertain-match confirmation, and reopening resolved issues.
@@ -19,6 +20,7 @@ Status key:
 - [x] Backend smoke checks, including comments and admin flows, passed against the configured Supabase project in the latest backend QA notes.
 - [x] Seed script creates repeatable sample issues and photos.
 - [~] Apply the schema and configure the storage bucket, Email provider, and server secrets for each new Supabase project.
+- [ ] Re-run the updated schema against existing projects to install atomic-write triggers/functions and backfill the latest still-available fix dates.
 - [~] Run the server against the target environment and confirm the health route is reachable from the intended phone or client.
 
 ## Frontend

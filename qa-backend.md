@@ -102,3 +102,10 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** The old time box, feature freeze, and submission steps had expired; continuing them would mislead contributors.
 - **Why it's good:** The docs describe ongoing product work and separate previously verified behavior from environment or phone checks still needed.
 - **Fallbacks / limits:** Status comes from source and existing QA notes; no application tests were rerun and pending device or environment checks remain open.
+
+### Atomic report writes and complete fix cycles — 2026-11-02
+- **Task:** Remove backend races, support fast client reconciliation, and replace the latest-fix-only storage behavior.
+- **Decision:** `schema.sql` adds atomic child-counter triggers, row-locked report/status RPCs, a serialized pre-insert recheck, and `issue_resolutions`; issue detail returns each fix/reopen cycle. Seed counts now follow actual child rows.
+- **Why:** Read-modify-write counters and separate evidence/status requests can lose updates or leave partial reports. Node matching remains the source of duplicate decisions; the database lock only detects rows the client pass has not examined.
+- **Why it's good:** Concurrent upvotes/comments/evidence keep accurate counters, only one report reopens a resolved issue, concurrent issue creation re-runs matching, and later fix dates are retained.
+- **Fallbacks / limits:** Existing projects must rerun `backend/sql/schema.sql`; dates already erased by the old schema cannot be recovered. No database migration or smoke run was performed in this task.

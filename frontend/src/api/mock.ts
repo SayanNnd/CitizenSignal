@@ -1,4 +1,4 @@
-import type { Candidate, Category, Comment, Evidence, Issue, MyIssue, MyRole, ReportResponse, Status } from '../types';
+import type { Candidate, Category, Comment, Evidence, Issue, IssueDetail, MyIssue, MyRole, ReportResponse, Resolution, Status } from '../types';
 
 /**
  * In-memory fixtures that follow the §4 contract exactly. Issues are stored as offsets from
@@ -68,6 +68,18 @@ const evidenceStore: Record<string, Evidence[]> = {
   ],
 };
 
+const resolutionStore: Record<string, Resolution[]> = {
+  '11111111-1111-1111-1111-111111111111': [
+    { id: 'r1', resolved_at: ago(7), reopened_at: null },
+  ],
+  '22222222-2222-2222-2222-222222222222': [
+    { id: 'r2', resolved_at: ago(2), reopened_at: ago(1) },
+  ],
+  '66666666-6666-6666-6666-666666666666': [
+    { id: 'r3', resolved_at: ago(5), reopened_at: null },
+  ],
+};
+
 const c = (id: string, issue_id: string, author: string, body: string, days: number): Comment => ({
   id, issue_id, author, body, created_at: new Date(Date.now() - days * DAY).toISOString(), is_mine: false,
 });
@@ -118,11 +130,11 @@ export async function mockListIssues(lat: number, lng: number, status?: Status):
   return { issues: store.filter((i) => !status || i.status === status).map(hydrate).sort(byPriority) };
 }
 
-export async function mockGetIssue(id: string): Promise<{ issue: Issue; evidence: Evidence[] }> {
+export async function mockGetIssue(id: string): Promise<IssueDetail> {
   await wait(200);
   const s = store.find((i) => i.id === id);
   if (!s) throw new Error('Not found');
-  return { issue: hydrate(s), evidence: evidenceStore[id] ?? [] };
+  return { issue: hydrate(s), evidence: evidenceStore[id] ?? [], resolution_history: resolutionStore[id] ?? [] };
 }
 
 /** Issues the (mock) user reported or contributed evidence to, newest own activity first. */
@@ -172,6 +184,13 @@ export async function mockSetStatus(id: string, status: Status): Promise<{ issue
   if (s.status !== status) {
     s.status = status;
     s.resolved_at = status === 'resolved' ? new Date().toISOString() : null;
+    const now = new Date().toISOString();
+    const cycles = resolutionStore[id] ??= [];
+    if (status === 'resolved') cycles.push({ id: `r-${Date.now()}`, resolved_at: now, reopened_at: null });
+    else {
+      const active = [...cycles].reverse().find((cycle) => cycle.reopened_at === null);
+      if (active) active.reopened_at = now;
+    }
   }
   return { issue: hydrate(s) };
 }
@@ -205,6 +224,8 @@ export async function mockReportIssue(fd: FormData): Promise<ReportResponse> {
       s.status = 'open';
       s.reopened_at = new Date().toISOString();
       s.recurrence_count += 1;
+      const active = [...(resolutionStore[s.id] ?? [])].reverse().find((cycle) => cycle.reopened_at === null);
+      if (active) active.reopened_at = s.reopened_at;
     }
     (evidenceStore[s.id] ??= []).unshift({
       id: `e-${Date.now()}`, issue_id: s.id, description, image_url: null, latitude, longitude, created_at: new Date().toISOString(),
@@ -229,6 +250,7 @@ export async function mockReportIssue(fd: FormData): Promise<ReportResponse> {
     upvotes: 0, evidence_count: 1, recurrence_count: 0, created_at: new Date().toISOString(),
     resolved_at: null, reopened_at: null, has_upvoted: false,
   };
+  resolutionStore[created.id] = [];
   store.push(created);
   markMine(created.id, 'reporter');
   return { outcome: 'created', issue: hydrate(created) };

@@ -21,7 +21,7 @@ We wanted three things:
 - **Duplicate detection.** When you report something, the server compares it with nearby issues of the same type. If it is clearly the same, your report is added to the existing issue. If it might be the same, the app asks you before saving anything.
 - **Reopening fixed issues.** If your report matches an issue that was marked as fixed, that issue is reopened and flagged as having come back, instead of a new one being created.
 - **Priority and severity.** Every issue has a priority score that grows with upvotes, extra reports, repeat failures and time spent waiting. In the app it shows up as a small yellow, orange or red triangle.
-- **Issue page.** A large photo, the full description, upvotes, a timeline of every report and the date it was fixed, and a comment thread.
+- **Issue page.** A large photo, the full description, upvotes, a timeline of every report and every fix/reopen cycle, and a comment thread.
 - **Search.** Look up a place to see issues there, or search the issues near you. The map moves to whatever you pick.
 - **Email and password sign-in.** Required to upvote, comment, and access admin actions. Browsing and reporting work without signing in.
 - **Your Issues.** Everything you reported, or added a report to, in one list.
@@ -110,6 +110,7 @@ You will need Node 24, an Android phone with Expo Go installed, and a Supabase p
 3. Under Authentication → Sign In / Providers, enable the Email provider. The server creates new accounts as confirmed, so the app does not use email confirmation or OTP.
 
 The photo bucket (`issue-images`) is created by the seed script if it doesn't exist yet.
+For an existing database, rerun `backend/sql/schema.sql` to install the counter triggers, atomic report functions, and fix-history table. It backfills the latest fix date still present on each issue; earlier dates already discarded by the old schema cannot be recovered.
 
 ### 2. Start the server
 
@@ -181,7 +182,7 @@ Everything lives under `/api`. The full contract, including every field and erro
 | POST | `/auth/login` | no | Signs in or creates an email and password account |
 | GET | `/issues?lat=&lng=&radius_m=` | optional | Nearby issues, highest priority first. Also accepts `q`, `category` and `status`. |
 | GET | `/issues/mine` | required | Issues you reported or added a report to |
-| GET | `/issues/:id` | optional | One issue with all of its reports |
+| GET | `/issues/:id` | optional | One issue, all reports, and its complete recorded fix/reopen history |
 | POST | `/issues` | optional | Report an issue (multipart form with a photo). Runs duplicate detection. |
 | POST / DELETE | `/issues/:id/upvote` | required | Add or remove your upvote |
 | GET | `/issues/:id/comments` | optional | Comments, oldest first |
@@ -204,7 +205,7 @@ The smoke test uses an isolated location and a throwaway account, then deletes t
 We would rather be upfront about these:
 
 - **Android only.** The app currently targets Android through Expo Go; iOS has not been implemented or validated.
-- **Only the latest fix date is stored.** If an issue is fixed, breaks, and is fixed again, the timeline shows only the most recent fix.
+- **Older fix dates may be unavailable.** New fix/reopen cycles are recorded. When upgrading an existing database, only the latest date still stored on an issue can be backfilled; earlier dates already lost cannot be reconstructed.
 - **The thresholds are hand-tuned.** The matching thresholds and priority weights are sensible starting points, not values backed by real data.
 - **Email ownership is not verified.** The server creates email/password accounts as confirmed; add an ownership check before using this for a public production service.
 - **Search runs in the app.** It filters the issues already loaded nearby rather than querying the server.
@@ -213,7 +214,6 @@ We would rather be upfront about these:
 
 ## Future work
 
-- Keep a full history of fixes, so repeat failures are easy to see at a glance
 - A simple dashboard for city staff to triage and close issues
 - Notify people when an issue they reported is fixed, or comes back
 - Use the server-side search for places outside the current area

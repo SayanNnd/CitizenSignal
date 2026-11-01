@@ -47,6 +47,19 @@ export interface Evidence {
   created_at: string;
 }
 
+/** A past or current period when an issue was marked fixed. */
+export interface Resolution {
+  id: string;
+  resolved_at: string;
+  reopened_at: string | null;
+}
+
+export interface IssueDetail {
+  issue: Issue;
+  evidence: Evidence[];
+  resolution_history: Resolution[];
+}
+
 /** GET/POST /api/issues/:id/comments item (roadmap §4). */
 export interface Comment {
   id: string;

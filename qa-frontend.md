@@ -163,3 +163,11 @@ Use this file to answer judges' "why did you do it this way?" questions about th
 - **Why:** The old time box, feature freeze, and submission steps had expired; continuing them would mislead contributors.
 - **Why it's good:** The docs describe ongoing product work and separate previously verified behavior from environment or phone checks still needed.
 - **Fallbacks / limits:** Status comes from source and existing QA notes; no application tests were rerun and pending device or environment checks remain open.
+
+### Optimistic feedback with server reconciliation — 2026-11-02
+- **Task:** Make mutations feel immediate, keep the app aligned with backend results, and display every recorded fix cycle.
+- **Decision:** `useIssues.ts` optimistically updates vote, comment, and status caches with rollback on failure; successful responses replace cached issue values and trigger background refresh. Reporting inserts/updates the returned issue in nearby cached lists; the detail timeline reads `resolution_history`.
+- **Why:** Waiting for a refetch before changing the screen felt slow and allowed stale values to linger. A separate local copy would drift from TanStack Query's server cache.
+- **Why it's good:** Counts, vote state, status, comments, and relevant list rows respond on tap; a failed write restores the prior screen, and successful writes are reconciled from the server.
+- **Fallbacks / limits:** Database behavior depends on rerunning the schema migration; no TypeScript check or Android phone run was performed in this task.
+- **[ALL]** Contract §4 `GET /issues/:id` now includes `resolution_history`; frontend types and mock fixtures were updated with the backend.

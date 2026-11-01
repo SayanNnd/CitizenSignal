@@ -153,7 +153,7 @@ Statuses: `open`, `resolved`.
 | GET | `/auth/me` | **required** | `{ id, email, is_admin }`. The app calls it on start, because a restored session never goes through login. |
 | GET | `/issues?lat&lng&radius_m=2000` | optional | Nearby issues, sorted by priority. Includes `has_upvoted` if token present. Optional filters below. |
 | GET | `/issues/mine` | **required** | `{ issues: MyIssue[] }` — issues the caller reported **or** contributed evidence to, newest own activity first (max 100). |
-| GET | `/issues/:id` | optional | Issue + evidence list |
+| GET | `/issues/:id` | optional | `{ issue, evidence, resolution_history }`; each history row has `id`, `resolved_at`, and nullable `reopened_at` |
 | POST | `/issues` | optional | Report (multipart). Runs the matching pipeline. |
 | POST | `/issues/:id/upvote` | **required** | Add upvote (one per user per issue) |
 | DELETE | `/issues/:id/upvote` | **required** | Remove upvote |
@@ -167,6 +167,8 @@ Statuses: `open`, `resolved`.
 `id, category, title, description, latitude, longitude, status, image_url, upvotes, evidence_count, recurrence_count, comment_count, priority, days_open, created_at, resolved_at, reopened_at, has_upvoted`
 
 **Comment object:** `id, issue_id, author, body, created_at, is_mine`. `author` is a public display name: "Meera K." from a profile name if there is one, otherwise the part of the email before the @ (never the full address), else "Citizen".
+
+**Resolution history row** (`GET /issues/:id`): `id, resolved_at, reopened_at`. A new row is written whenever an open issue becomes resolved; reopening closes that cycle. Existing databases can backfill only the latest `resolved_at` still present on each issue.
 
 **MyIssue object** (`/issues/mine`): Issue + `my_role`: `"reporter"` (caller created it) or `"contributor"` (caller's report was merged into it, including reopening it). Logged-out reports have no owner, so they never appear here.
 
@@ -202,15 +204,17 @@ Confirmation flow is **stateless**: the app re-submits the same form with `confi
 | `recurrence_count` | int, default 0 |
 | `comment_count` | int, default 0 (cached count of `comments` rows) |
 | `created_by` | uuid, nullable (auth user) |
-| `created_at`, `resolved_at`, `reopened_at` | timestamptz |
+| `created_at`, `resolved_at`, `reopened_at` | timestamptz; `issue_resolutions` stores every fix/reopen cycle |
 
 **`evidence`** — `id`, `issue_id` (FK), `description`, `image_url`, `latitude`, `longitude`, `created_by` (nullable), `created_at`
 **`upvotes`** — `issue_id` (FK), `user_id` (uuid, FK to `auth.users`), `created_at`, **primary key `(issue_id, user_id)`** → one vote per user, enforced by the DB.
 **`comments`** — `id`, `issue_id` (FK, cascade), `user_id` (FK to `auth.users`), `author` (display name), `body` (1–500 chars), `created_at`.
 
-Indexes: `issues(latitude, longitude)`, `issues(status)`, `evidence(issue_id)`, `comments(issue_id, created_at)`.
+**`issue_resolutions`** — `id`, `issue_id` (FK, cascade), `resolved_at`, nullable `reopened_at`, one row per fix cycle.
+
+Indexes: `issues(latitude, longitude)`, `issues(status)`, `evidence(issue_id)`, `comments(issue_id, created_at)`, `issue_resolutions(issue_id, resolved_at)`.
 Storage: public bucket **`issue-images`**.
-The `upvotes`, `evidence_count` and `comment_count` counters on `issues` are updated by the server in the same request as the insert/delete into the child table.
+Database triggers update the `upvotes`, `evidence_count` and `comment_count` counters in the same transaction as child-row writes. Report creation uses a category-scoped transaction lock to catch concurrent nearby issue inserts before committing a new issue; matching remains in Node and reuses Geolib/string-similarity when a concurrent candidate appears. Evidence insertion, reopening, recurrence increments, and resolution history are atomic. Re-run `backend/sql/schema.sql` against existing projects to install the idempotent migration and backfill the latest fix date still available.
 
 ---
 
@@ -233,7 +237,7 @@ Pipeline order (`matching.service.ts`):
 4. Normalize both descriptions (lowercase, strip punctuation, trim) → `compareTwoStrings`.
 5. Best match has text ≥ 0.75 **and** distance ≤ 25 m → auto-merge.
 6. Else any with text ≥ 0.50 → return `needs_confirmation` (top 3).
-7. Else create new.
+7. Else create new. Before committing, a category-scoped transaction lock checks whether a nearby row appeared after matching; if one did, the server repeats this Node matching pipeline before creating.
 
 Merging into an issue: insert `evidence` row, `evidence_count + 1`. If it was `resolved` → set `status='open'`, `reopened_at=now()`, `recurrence_count + 1`, outcome `reopened`.
 
@@ -266,10 +270,10 @@ Use these scenarios when validating changes to reporting, matching, or account f
 3. Submit a similar report near a resolved issue. The issue reopens, its recurrence count increases, and the report is attached as evidence.
 4. Submit a possible but uncertain match. The API returns candidates without saving; confirming a candidate merges the report, while choosing a new issue creates one.
 5. Browse and report while logged out. Signing in is required for upvotes, comments, and admin actions; only configured admin accounts can change issue status.
+6. Resolve, reopen, and resolve an issue again; its detail timeline shows both fix dates and the reopen date between them.
 
 ## 10. Future development
 
-- Store a complete history of fixes so repeat failures and prior resolution dates remain visible.
 - Expand staff triage tools beyond the existing Manage Issues screen.
 - Notify contributors when an issue is resolved or reopens.
 - Extend search to areas beyond the currently loaded map region.

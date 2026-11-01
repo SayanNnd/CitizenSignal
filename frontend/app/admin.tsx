@@ -67,7 +67,7 @@ export default function AdminScreen() {
     return <ErrorState message="Couldn't load issues for this area." onRetry={() => refetch()} />;
   }
 
-  // One mutation at a time per row: the button of the issue being changed shows a spinner.
+  // Status writes share a serial queue; only the row being changed shows a spinner.
   const pendingId = setStatus.isPending ? setStatus.variables?.id : undefined;
 
   function toggle(issue: Issue) {
@@ -121,7 +121,12 @@ export default function AdminScreen() {
             issue={item}
             badge={statusLine(item)}
             onPress={() => router.push(`/issue/${item.id}`)}
-            footer={<AdminStatusButton status={item.status} pending={pendingId === item.id} onPress={() => toggle(item)} />}
+            footer={<AdminStatusButton
+              status={item.status}
+              pending={pendingId === item.id}
+              disabled={setStatus.isPending}
+              onPress={() => toggle(item)}
+            />}
           />
         )}
         refreshing={isRefetching}

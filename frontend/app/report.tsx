@@ -195,7 +195,10 @@ export default function ReportScreen() {
           activeOpacity={0.85}
         >
           {isPending ? (
-            <ActivityIndicator color={colors.onAccent} />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <ActivityIndicator color={colors.onAccent} />
+              <Text style={[s.submitText, { fontSize: 14, flexShrink: 1 }]}>Posting and checking nearby reports…</Text>
+            </View>
           ) : (
             <Text style={[s.submitText, !canSubmit && { color: colors.muted }]}>Post report</Text>
           )}

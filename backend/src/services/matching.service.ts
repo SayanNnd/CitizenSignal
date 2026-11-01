@@ -21,7 +21,7 @@ export interface ScoredMatch {
 }
 
 export type MatchResult =
-  | { kind: 'none' }
+  | { kind: 'none'; checkedIssueIds: string[] }
   | { kind: 'auto'; match: ScoredMatch }
   | { kind: 'candidates'; matches: ScoredMatch[] };
 
@@ -69,7 +69,7 @@ export async function findMatches(
     if (text_score >= CANDIDATE_TEXT) scored.push({ row, distance_m, text_score });
   }
 
-  if (!scored.length) return { kind: 'none' };
+  if (!scored.length) return { kind: 'none', checkedIssueIds: rows.map((row) => row.id) };
 
   // Best by text score, then by proximity.
   scored.sort((a, b) => b.text_score - a.text_score || a.distance_m - b.distance_m);

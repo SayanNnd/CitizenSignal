@@ -5,7 +5,7 @@ import {
 } from './mock';
 import { USE_MOCK } from '../lib/env';
 import { DEFAULT_RADIUS_M, MAX_RADIUS_M } from '../constants/limits';
-import type { Issue, MyIssue, Evidence, ReportResponse, Comment, Status } from '../types';
+import type { Issue, MyIssue, IssueDetail, ReportResponse, Comment, Status } from '../types';
 
 export async function listIssues(params: {
   lat: number;
@@ -23,7 +23,7 @@ export async function listIssues(params: {
   return apiFetch(`/api/issues?${q}`);
 }
 
-export async function getIssue(id: string): Promise<{ issue: Issue; evidence: Evidence[] }> {
+export async function getIssue(id: string): Promise<IssueDetail> {
   if (USE_MOCK) return mockGetIssue(id);
   return apiFetch(`/api/issues/${id}`);
 }

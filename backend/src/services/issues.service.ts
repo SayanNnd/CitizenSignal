@@ -1,4 +1,5 @@
 import { getDistance } from 'geolib';
+import { PREFILTER_METRES } from '../config/matching.js';
 import { supabase } from '../config/supabase.js';
 import { HttpError } from '../lib/http-error.js';
 import { boundingBox } from '../lib/geo.js';
@@ -17,6 +18,8 @@ import type {
   IssueRow,
   MyIssue,
   ReportResponse,
+  Resolution,
+  ResolutionRow,
   Status,
 } from '../types/index.js';
 
@@ -132,46 +135,6 @@ async function getUpvotedIds(userId: string, issueIds: string[]): Promise<Set<st
   return new Set((data ?? []).map((r: { issue_id: string }) => r.issue_id));
 }
 
-/** How a cached counter on `issues` is derived from a child table: `base + rows for this issue`. */
-const COUNTERS = {
-  upvotes: { table: 'upvotes', base: 0 },
-  evidence_count: { table: 'evidence', base: 1 }, // 1 = the issue's own first report
-  comment_count: { table: 'comments', base: 0 },
-} as const;
-
-/** Safety cap for `syncCounter`'s re-check loop; it normally finishes on the first pass. */
-const MAX_COUNTER_SYNC_ATTEMPTS = 5;
-
-async function countRows(table: (typeof COUNTERS)[keyof typeof COUNTERS]['table'], issueId: string): Promise<number> {
-  const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true }).eq('issue_id', issueId);
-  if (error) throw new Error(`Counting ${table} failed: ${error.message}`);
-  return count ?? 0;
-}
-
-/**
- * Recounts the child rows and stores the total on the issue. After writing it counts again and
- * rewrites if the number moved, so when concurrent requests race, whoever writes last also
- * re-checks — the stored counter always settles on the true count (no lost increments).
- */
-async function syncCounter(issueId: string, column: keyof typeof COUNTERS): Promise<IssueRow> {
-  const { table, base } = COUNTERS[column];
-  let total = base + (await countRows(table, issueId));
-
-  for (let attempt = 1; ; attempt++) {
-    const { data, error } = await supabase
-      .from('issues')
-      .update({ [column]: total })
-      .eq('id', issueId)
-      .select()
-      .single();
-    if (error) throw new Error(`Updating ${column} failed: ${error.message}`);
-
-    const recount = base + (await countRows(table, issueId));
-    if (recount === total || attempt >= MAX_COUNTER_SYNC_ATTEMPTS) return data as IssueRow;
-    total = recount;
-  }
-}
-
 // ── reads ────────────────────────────────────────────────────────────────────
 
 /**
@@ -272,17 +235,24 @@ export async function getMyIssues(userId: string): Promise<MyIssue[]> {
     .slice(0, MAX_MY_ISSUES);
 }
 
-export async function getIssueById(id: string, userId?: string): Promise<{ issue: Issue; evidence: Evidence[] }> {
-  const [row, evidenceResult, upvoted] = await Promise.all([
+export async function getIssueById(id: string, userId?: string): Promise<{ issue: Issue; evidence: Evidence[]; resolution_history: Resolution[] }> {
+  const [row, evidenceResult, resolutionResult, upvoted] = await Promise.all([
     requireIssueRow(id),
     supabase.from('evidence').select('*').eq('issue_id', id).order('created_at', { ascending: false }),
+    supabase.from('issue_resolutions').select('id,issue_id,resolved_at,reopened_at').eq('issue_id', id).order('resolved_at', { ascending: true }),
     userId ? getUpvotedIds(userId, [id]) : Promise.resolve(new Set<string>()),
   ]);
   if (evidenceResult.error) throw new Error(`Evidence lookup failed: ${evidenceResult.error.message}`);
+  if (resolutionResult.error) throw new Error(`Resolution history lookup failed: ${resolutionResult.error.message}`);
 
   return {
     issue: toIssue(row, upvoted.has(id)),
     evidence: ((evidenceResult.data ?? []) as EvidenceRow[]).map(toEvidence),
+    resolution_history: ((resolutionResult.data ?? []) as ResolutionRow[]).map((cycle) => ({
+      id: cycle.id,
+      resolved_at: cycle.resolved_at,
+      reopened_at: cycle.reopened_at,
+    })),
   };
 }
 
@@ -301,20 +271,20 @@ export interface ReportInput {
 
 /** What a report will do, decided before anything is written or uploaded. */
 type ReportPlan =
-  | { action: 'create' }
+  | { action: 'create'; checkedIssueIds?: string[]; forceNew?: boolean }
   | { action: 'merge'; target: IssueRow }
   | { action: 'confirm'; matches: ScoredMatch[] };
 
 async function planReport(input: ReportInput): Promise<ReportPlan> {
   // Step 1: the user already answered the "same issue?" question.
   if (input.confirm_issue_id) return { action: 'merge', target: await requireIssueRow(input.confirm_issue_id) };
-  if (input.force_new) return { action: 'create' };
+  if (input.force_new) return { action: 'create', forceNew: true };
 
   // Steps 2–7: run the matching pipeline.
   const result = await findMatches(input.category, input.description, input.latitude, input.longitude);
   if (result.kind === 'auto') return { action: 'merge', target: result.match.row };
   if (result.kind === 'candidates') return { action: 'confirm', matches: result.matches };
-  return { action: 'create' };
+  return { action: 'create', checkedIssueIds: result.checkedIssueIds };
 }
 
 /**
@@ -322,7 +292,7 @@ async function planReport(input: ReportInput): Promise<ReportPlan> {
  * not even the photo. The photo is only uploaded once we know a row will be written.
  */
 export async function reportIssue(input: ReportInput): Promise<ReportResponse> {
-  const plan = await planReport(input);
+  let plan = await planReport(input);
 
   if (plan.action === 'confirm') {
     const candidates = plan.matches.map(toCandidate);
@@ -331,114 +301,102 @@ export async function reportIssue(input: ReportInput): Promise<ReportResponse> {
 
   const image = await processAndUploadImage(input.photo);
   try {
-    if (plan.action === 'create') {
-      return { outcome: 'created', issue: await createIssue(input, image) };
+    while (true) {
+      if (plan.action === 'create') {
+        const issue = await createIssue(input, image, plan.checkedIssueIds, plan.forceNew === true);
+        if (issue) return { outcome: 'created', issue };
+
+        // A report landed after matching ran. Re-evaluate it with the canonical Node matcher;
+        // the next create attempt checks that it has examined every nearby row before inserting.
+        plan = await planReport(input);
+        if (plan.action === 'confirm') {
+          const candidates = plan.matches.map(toCandidate);
+          await deleteImage(image.path);
+          return { outcome: 'needs_confirmation', issue: candidates[0], candidates };
+        }
+        continue;
+      }
+
+      const { issue, reopened } = await addEvidence(plan.target.id, input, image);
+      return { outcome: reopened ? 'reopened' : 'merged', issue };
     }
-    const { issue, reopened } = await addEvidence(plan.target, input, image);
-    return { outcome: reopened ? 'reopened' : 'merged', issue };
   } catch (err) {
     await deleteImage(image.path);
     throw err;
   }
 }
 
-async function createIssue(input: ReportInput, image: UploadedImage): Promise<Issue> {
-  const { data, error } = await supabase
-    .from('issues')
-    .insert({
-      category: input.category,
-      title: generateTitle(input.category, input.description),
-      description: input.description,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      image_url: image.publicUrl,
-      created_by: input.userId ?? null,
-    })
-    .select()
-    .single();
+interface ConditionalCreateResult {
+  created: boolean;
+  issue: IssueRow | null;
+}
+
+async function createIssue(
+  input: ReportInput,
+  image: UploadedImage,
+  checkedIssueIds?: string[],
+  forceNew = false,
+): Promise<Issue | null> {
+  const box = boundingBox(input.latitude, input.longitude, PREFILTER_METRES);
+  const { data, error } = await supabase.rpc('create_issue_if_unseen', {
+    p_category: input.category,
+    p_title: generateTitle(input.category, input.description),
+    p_description: input.description,
+    p_latitude: input.latitude,
+    p_longitude: input.longitude,
+    p_min_lat: box.minLat,
+    p_max_lat: box.maxLat,
+    p_min_lng: box.minLng,
+    p_max_lng: box.maxLng,
+    p_image_url: image.publicUrl,
+    p_created_by: input.userId ?? null,
+    p_checked_issue_ids: checkedIssueIds ?? [],
+    p_force_new: forceNew,
+  });
   if (error) throw new Error(`Issue insert failed: ${error.message}`);
-  return toIssue(data as IssueRow);
+  const result = data as ConditionalCreateResult | null;
+  if (!result?.created || !result.issue) return null;
+  return toIssue(result.issue);
 }
 
 /**
- * Reopens a resolved issue. The update only applies while the row is still resolved, so when
- * several reports hit the same resolved issue at once exactly one reopens it (recurrence +1)
- * and the rest become plain merges. Returns whether this call did the reopen.
- */
-async function reopenIfResolved(target: IssueRow): Promise<boolean> {
-  if (target.status !== 'resolved') return false;
-  const { data, error } = await supabase
-    .from('issues')
-    .update({ status: 'open', reopened_at: new Date().toISOString(), recurrence_count: target.recurrence_count + 1 })
-    .eq('id', target.id)
-    .eq('status', 'resolved')
-    .eq('recurrence_count', target.recurrence_count)
-    .select('id');
-  if (error) throw new Error(`Reopening issue failed: ${error.message}`);
-  return (data ?? []).length > 0;
-}
-
-/**
- * Attaches the report to an existing issue as evidence and bumps its counters.
- * If the issue was resolved, it is reopened and `recurrence_count` goes up.
- * Counters are recounted / conditionally updated rather than read-modify-written,
- * so concurrent reports can't lose an increment.
+ * Attaches evidence and, if needed, reopens the issue in one database transaction. A row lock
+ * makes concurrent reports observe the latest status, so only the first reopens and increments
+ * recurrence_count.
  */
 async function addEvidence(
-  target: IssueRow,
+  issueId: string,
   input: ReportInput,
   image: UploadedImage,
 ): Promise<{ issue: Issue; reopened: boolean }> {
-  const { data: evidenceRow, error: evidenceError } = await supabase
-    .from('evidence')
-    .insert({
-      issue_id: target.id,
-      description: input.description,
-      image_url: image.publicUrl,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      created_by: input.userId ?? null,
-    })
-    .select('id')
-    .single();
-  if (evidenceError) throw new Error(`Evidence insert failed: ${evidenceError.message}`);
+  const { data, error } = await supabase.rpc('add_issue_evidence_and_reopen', {
+    p_issue_id: issueId,
+    p_description: input.description,
+    p_image_url: image.publicUrl,
+    p_latitude: input.latitude,
+    p_longitude: input.longitude,
+    p_created_by: input.userId ?? null,
+  });
+  if (error) throw new Error(`Evidence insert failed: ${error.message}`);
+  const result = data as { issue: IssueRow; reopened: boolean } | null;
+  if (!result?.issue) throw HttpError.notFound('Issue not found');
 
-  let reopened: boolean;
-  let row: IssueRow;
-  try {
-    reopened = await reopenIfResolved(target);
-    row = await syncCounter(target.id, 'evidence_count');
-  } catch (err) {
-    // Don't leave an evidence row pointing at the photo the caller is about to delete.
-    await supabase.from('evidence').delete().eq('id', evidenceRow.id);
-    throw err;
-  }
-
-  const has_upvoted = input.userId ? (await getUpvotedIds(input.userId, [target.id])).has(target.id) : false;
-  return { issue: toIssue(row, has_upvoted), reopened };
+  const has_upvoted = input.userId ? (await getUpvotedIds(input.userId, [issueId])).has(issueId) : false;
+  return { issue: toIssue(result.issue, has_upvoted), reopened: result.reopened };
 }
 
 // ── admin ────────────────────────────────────────────────────────────────────
 
 /**
- * Admin override: close an issue (`resolved`, `resolved_at` = now) or open it again. Reopening here
- * is an undo, not a recurrence: it clears `resolved_at` and leaves `recurrence_count` alone, which
- * only goes up when a citizen reports a fixed issue again (`reopenIfResolved`). Setting the status
- * the issue already has changes nothing.
+ * Admin override: close or open an issue. Opening closes the current fix cycle but leaves
+ * recurrence_count alone; only a citizen report increments that counter. Repeated status requests
+ * are idempotent.
  */
 export async function setIssueStatus(issueId: string, status: Status, userId: string): Promise<Issue> {
-  let row = await requireIssueRow(issueId);
-
-  if (row.status !== status) {
-    const { data, error } = await supabase
-      .from('issues')
-      .update({ status, resolved_at: status === 'resolved' ? new Date().toISOString() : null })
-      .eq('id', issueId)
-      .select()
-      .single();
-    if (error) throw new Error(`Status update failed: ${error.message}`);
-    row = data as IssueRow;
-  }
+  const { data, error } = await supabase.rpc('set_issue_status', { p_issue_id: issueId, p_status: status });
+  if (error) throw new Error(`Status update failed: ${error.message}`);
+  if (!data) throw HttpError.notFound('Issue not found');
+  const row = data as IssueRow;
 
   const upvoted = await getUpvotedIds(userId, [issueId]);
   return toIssue(row, upvoted.has(issueId));
@@ -454,7 +412,7 @@ export async function addUpvote(issueId: string, userId: string): Promise<Issue>
   // Already voted → not an error; just return the current state.
   if (error && error.code !== UNIQUE_VIOLATION) throw new Error(`Upvote failed: ${error.message}`);
 
-  return toIssue(await syncCounter(issueId, 'upvotes'), true);
+  return toIssue(await requireIssueRow(issueId), true);
 }
 
 /** Removes the caller's vote. Idempotent: removing a vote that isn't there is fine. */
@@ -464,7 +422,7 @@ export async function removeUpvote(issueId: string, userId: string): Promise<Iss
   const { error } = await supabase.from('upvotes').delete().eq('issue_id', issueId).eq('user_id', userId);
   if (error) throw new Error(`Removing upvote failed: ${error.message}`);
 
-  return toIssue(await syncCounter(issueId, 'upvotes'), false);
+  return toIssue(await requireIssueRow(issueId), false);
 }
 
 // ── comments ─────────────────────────────────────────────────────────────────
@@ -483,7 +441,7 @@ export async function getComments(issueId: string, userId?: string): Promise<Com
   return ((data ?? []) as CommentRow[]).map((row) => toComment(row, userId));
 }
 
-/** Adds a comment as the verified user and refreshes the issue's cached `comment_count`. */
+/** Adds a comment as the verified user; the database trigger increments its count atomically. */
 export async function addComment(issueId: string, user: AuthUser, body: string): Promise<Comment> {
   await requireIssueRow(issueId);
 
@@ -494,6 +452,5 @@ export async function addComment(issueId: string, user: AuthUser, body: string):
     .single();
   if (error) throw new Error(`Comment insert failed: ${error.message}`);
 
-  await syncCounter(issueId, 'comment_count');
   return toComment(data as CommentRow, user.id);
 }

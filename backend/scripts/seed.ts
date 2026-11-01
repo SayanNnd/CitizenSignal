@@ -35,6 +35,7 @@ interface SeedIssue {
   dLat: number;
   dLng: number;
   status: Status;
+  /** Seed data has no synthetic user votes; vote totals follow the upvotes table exactly. */
   upvotes: number;
   recurrence_count: number;
   createdDaysAgo: number;
@@ -53,7 +54,7 @@ const SEED: SeedIssue[] = [
     dLat: 0,
     dLng: 0,
     status: 'resolved',
-    upvotes: 8,
+    upvotes: 0,
     recurrence_count: 0,
     createdDaysAgo: 21,
     resolvedDaysAgo: 7,
@@ -66,7 +67,7 @@ const SEED: SeedIssue[] = [
     dLat: 0.00015,
     dLng: 0.0001,
     status: 'open',
-    upvotes: 5,
+    upvotes: 0,
     recurrence_count: 1,
     createdDaysAgo: 30,
     resolvedDaysAgo: 12,
@@ -80,7 +81,7 @@ const SEED: SeedIssue[] = [
     dLat: 0.0003,
     dLng: -0.0002,
     status: 'open',
-    upvotes: 3,
+    upvotes: 0,
     recurrence_count: 0,
     createdDaysAgo: 2,
     evidence: [],
@@ -92,7 +93,7 @@ const SEED: SeedIssue[] = [
     dLat: -0.0004,
     dLng: 0.0003,
     status: 'open',
-    upvotes: 12,
+    upvotes: 0,
     recurrence_count: 2,
     createdDaysAgo: 14,
     evidence: ['Bin still overflowing, stray dogs spreading the rubbish', 'Smell is unbearable now', 'Still not cleared'],
@@ -104,7 +105,7 @@ const SEED: SeedIssue[] = [
     dLat: 0.0006,
     dLng: 0.0005,
     status: 'open',
-    upvotes: 1,
+    upvotes: 0,
     recurrence_count: 0,
     createdDaysAgo: 0,
     evidence: [],
@@ -204,7 +205,7 @@ async function seed() {
         status: s.status,
         image_url: await placeholderPhoto(s.category, 'Original report'),
         upvotes: s.upvotes,
-        evidence_count: 1 + s.evidence.length,
+        evidence_count: 1,
         recurrence_count: s.recurrence_count,
         created_at: daysAgo(s.createdDaysAgo),
         resolved_at: s.resolvedDaysAgo === undefined ? null : daysAgo(s.resolvedDaysAgo),
@@ -213,6 +214,16 @@ async function seed() {
       .select('id')
       .single();
     if (error) throw new Error(`Inserting ${s.label} failed: ${error.message}`);
+
+    if (s.resolvedDaysAgo !== undefined) {
+      const resolvedAt = daysAgo(s.resolvedDaysAgo);
+      const { error: resolutionError } = await supabase.from('issue_resolutions').insert({
+        issue_id: issue.id,
+        resolved_at: resolvedAt,
+        reopened_at: s.reopenedDaysAgo === undefined ? null : daysAgo(s.reopenedDaysAgo),
+      });
+      if (resolutionError) throw new Error(`Inserting fix history for ${s.label} failed: ${resolutionError.message}`);
+    }
 
     if (s.evidence.length) {
       const photos = await Promise.all(s.evidence.map((_, i) => placeholderPhoto(s.category, `Evidence #${i + 1}`)));

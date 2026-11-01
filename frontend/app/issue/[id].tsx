@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useIsMutating } from '@tanstack/react-query';
 import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity, Alert, KeyboardAvoidingView, RefreshControl,
   type ScrollViewInstance,
@@ -37,7 +38,8 @@ export default function IssueDetailScreen() {
   const scrollRef = useRef<ScrollViewInstance>(null);
 
   const { data, isLoading, isError, refetch } = useIssue(id);
-  const { add, remove } = useUpvote();
+  const { add, remove } = useUpvote(id);
+  const upvotesPending = useIsMutating({ mutationKey: ['issue-upvote', id] }) > 0;
   const comments = useComments(id);
   const addComment = useAddComment(id);
   // Reloads the issue, its timeline and the comments.
@@ -58,10 +60,10 @@ export default function IssueDetailScreen() {
   if (isLoading) return <LoadingState label="Loading issue…" />;
   if (isError || !data) return <ErrorState message="Couldn't load this issue." onRetry={() => refetch()} />;
 
-  const { issue, evidence } = data;
+  const { issue, evidence, resolution_history } = data;
   const tint = CATEGORY_COLORS[issue.category];
-  const busy = add.isPending || remove.isPending;
-  const commentCount = comments.data?.length ?? issue.comment_count;
+  const busy = add.isPending || remove.isPending || upvotesPending;
+  const commentCount = issue.comment_count;
   const recurring = recurrenceLabel(issue.recurrence_count);
 
   function handleUpvote() {
@@ -91,16 +93,16 @@ export default function IssueDetailScreen() {
     }
   }
 
-  // Every report (the first one plus each one merged in as evidence), the fix date and the date it
-  // came back, oldest first. The API only keeps the most recent fix and reopen dates, so earlier
-  // rounds of a recurring issue can't be listed.
+  // Every report and every complete fix/reopen cycle, oldest first.
   const events: TimelineEvent[] = [
     { key: 'created', kind: 'report' as const, label: 'Reported', date: issue.created_at },
     ...evidence.map((e) => ({
       key: e.id, kind: 'report' as const, label: 'Reported again', date: e.created_at, text: e.description, image: e.image_url,
     })),
-    ...(issue.resolved_at ? [{ key: 'fixed', kind: 'fixed' as const, label: 'Fixed', date: issue.resolved_at }] : []),
-    ...(issue.reopened_at ? [{ key: 'reopened', kind: 'reopened' as const, label: 'Came back', date: issue.reopened_at }] : []),
+    ...resolution_history.flatMap((cycle) => [
+      { key: `fixed-${cycle.id}`, kind: 'fixed' as const, label: 'Fixed', date: cycle.resolved_at },
+      ...(cycle.reopened_at ? [{ key: `reopened-${cycle.id}`, kind: 'reopened' as const, label: 'Came back', date: cycle.reopened_at }] : []),
+    ]),
   ].sort((a, b) => a.date.localeCompare(b.date));
 
   return (
